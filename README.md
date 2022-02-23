@@ -1,3 +1,4 @@
 # Zhaojing_Chen
 repository for bcb420 for Zhaojing Chen
-[assignment 1](file:///Users/zhaojingchen/Desktop/BCB420/RNA-seq%20analysis/A1.html)
+Assignment 1 html : https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/A1.html
+Assignment1 Rmd : https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/A1.Rmd
