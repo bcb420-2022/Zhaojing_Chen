@@ -1,0 +1,329 @@
+---
+title: "Assignmnet 1 : Treatment of DEX and ETOH in HCC70 and MDA231 cell lines"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r,setup, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+if (!requireNamespace("BiocManager",quietly = TRUE))
+  install.packages("BiocManager")
+if (!requireNamespace("GEOmetadb",quietly = TRUE))
+  install.packages('GEOmetadb')
+if (!requireNamespace("edgeR",quietly = TRUE))
+  install.packages("edgeR")
+if (!requireNamespace("tidyverse",quietly = TRUE))
+  install.packages("tidyverse")
+if(!file.exists('GEOmetadb.sqlite')) getSQLiteFile()
+#file.info("GEOmetadb.sqlite")
+if (!requireNamespace("biomaRt",quietly = TRUE))
+  install.packages("biomaRt")
+library(knitr)
+library(edgeR)
+library(tidyverse)
+library(GEOmetadb)
+library(ggplot2)
+library(biomaRt)
+
+```
+## Introduction
+
+This paper investigates the transcription factors that define the gene expression pattern for basal-like triple negative. Despite RNA-sequencing, the scientists performed different experiments to verify that STAT3 and GR cooperatively defined the gene expression pattern for basal-like triple negative. This dataset from Geo is only a small part, it describes the gene count of two basal-like breast cancer cell lines, HCC70 and MDA231, when treated with dexamethasone or ethanol vehicle control for 4 hours. The purpose of this dataset is to determine which genes are regulated by GR since dexamethasone induces GR.
+
+
+## Data Exploration
+
+```{r,echo=FALSE,results="hide",message=FALSE}
+# GEO description of my dataset
+# GSE Series Matrix only specific for microarray 
+#Meta() get documentation?
+GSE152201<-getGEO("GSE152201", GSEMatrix=FALSE)
+knitr::kable(data.frame(head(Meta(GSE152201))),format="html")
+GPLList(GSE152201)
+Meta(GSE152201)
+current_platform=names(GPLList(GSE152201))[1]
+current_platform_infor = Meta(getGEO(current_platform))
+names=names(current_platform_infor)
+names
+
+```
+### Basic information about my dataset 
+
+**Platform title**:`r current_platform_infor$title`
+
+**Submission data**:`r current_platform_infor$submission_date`
+
+**Last update data**:`r current_platform_infor$last_update_date`
+
+**Organism**:`r current_platform_infor$last_update_date`
+
+**Number of GEO datasets that use this technology**:`r length(current_platform_infor$series_id)`
+
+**Number of GEO samples that use this technology**: `r length(current_platform_infor$sample_id)`
+
+
+```{r,warning=FALSE,results="hide",message=FALSE}
+#Get the expression Data
+#check,names= FALSE  don't want to correct for the data
+seq_files =getGEOSuppFiles("GSE152201")
+file_name =rownames(seq_files)
+file_name
+exp_data = read.delim(file_name[1],header=TRUE,check.names = FALSE)
+
+```
+#### example of the grouping of my dataset
+
+```{r,echo=FALSE,message=FALSE}
+#define the group # question
+# define what each sample are 
+colnames(exp_data)[1]<-"ensembl_id"
+samples <- data.frame(lapply(colnames(exp_data)[2:13],         FUN=function(x){unlist(strsplit(x, split = "\\_"))[c(1,2,4)]})) 
+colnames(samples) <- colnames(exp_data)[2:13] 
+rownames(samples) <- c("cell_lines","treatment","replicates") 
+samples <- data.frame(t(samples))
+kable(samples[1:6,1:3],format = "html")
+# the first column is not what I want, break into two column
+exp_data<-exp_data %>% separate(ensembl_id,c("gene_name","gene_id"),sep = "\\_",extra = "merge", fill = "right")
+exp_data<-exp_data %>% separate(gene_id,c("gene_id"),extra = "drop")
+
+
+```
+
+#### Split the variable
+
+The original dataset has some issue with improper ensembl_id. ensembl_id and gene name were together in one variable. I split according to the pattern "_", however, some unimportant data information such as those with 5s_RNA and Y_RNA cause trouble of uneven splitting. I ignore those as those genes are not important and are filtered out mostly in the exp_data_filtered dataset
+
+
+
+## Filter low count
+
+Because of the structure of my dataset, I chose a different strategy. I first group by cell line, and within each cell line,  there are three replicates for each condition (ETOH and DEX). I filter out count per million < 3. Basically, if in either cell line, the total count of a gene is greater than count per million < 3, I will keep the data. This might accidentally keep some unwanted data but at least I won't miss any important data. 
+
+```{r,echo=TRUE,message=FALSE,results="hide"}
+count_per_million_HCC=cpm(exp_data[,3:8])
+count_per_million_MDA=cpm(exp_data[,9:14])
+rownames(count_per_million_HCC)<-exp_data[,"gene_id"]
+rownames(count_per_million_MDA)<-exp_data[,"gene_id"]
+keep = rowSums(count_per_million_HCC>1 | count_per_million_MDA>1) >= 3
+exp_data_filtered =exp_data[keep,]
+summarised_gene_count <-sort(table(exp_data_filtered$gene_id),decreasing = TRUE)
+summarised_gene_count_unfiltered <-sort(table(exp_data$gene_id),decreasing = TRUE)
+kable(summarised_gene_count_unfiltered[which(summarised_gene_count>1)][1:6],format = "html")
+kable(summarised_gene_count[which(summarised_gene_count>1)][1:6],format = "html")
+dim(exp_data)
+low_count_filtered<-nrow(exp_data_filtered)
+```
+
+
+## Normalization
+TMM normalization was applied by grouping  treatment using EdgeR package to get trimmed mean.
+Since my dataset is sort of nested within each cell line, I am wondering if there is better way for normalization.
+The resulting distribution is unlikely bimodel because I got similar distribution shape when graphing for each cell line alone (data not shown) The bump there is more likely as a result of RNA-seq technology 
+
+```{r,echo=FALSE,message=FALSE,results="hide"}
+#distribution : density
+log_cpm_data<-log2(cpm(exp_data_filtered[,3:14]))
+data_density<-apply(log_cpm_data,2,density)
+data_density
+#set the x and y limit of the plot
+xlim<-0;ylim<-0
+for(i in 1:length(data_density)){
+  xlim<-range(c(xlim,data_density[[i]]$x)); # a bit confused
+  ylim<-range(c(ylim,data_density[[i]]$y))
+}
+xlim
+cols<-rainbow(length(data_density))
+cols
+ltys<-rep(1,length(data_density))
+plot(data_density[[1]],xlim=xlim,ylim=ylim,type="n",
+     ylab="Smoothing density of log2-cpm",main="Unnormalized Distribution of HCC and MDA treated with ETOH or DEX",xlab="counts in log2-cpm", cex.lab=0.8)
+for (i in 1:length(data_density)) {lines(data_density[[i]],col=cols[[i]],lty=ltys)
+}
+#create legend
+legend("topright", colnames(log_cpm_data),col=cols, lty=ltys, 
+       cex=0.75, border ="blue",text.col = "green4",merge = TRUE, 
+       bg = "gray90")
+ltys
+
+```
+
+
+```{r,echo=TRUE,results='hide',message=FALSE}
+# apply TMM
+filtered_data_matrix <- as.matrix(exp_data_filtered[,3:14]) 
+rownames(filtered_data_matrix) <- exp_data_filtered$gene_id
+d = DGEList(counts=filtered_data_matrix, group=samples$treatment)
+d_TMM = calcNormFactors(d)
+normalized_counts <- cpm(d_TMM)
+```
+
+```{r,echo=FALSE,message=FALSE,results="hide"}
+#normalized plot
+data_density<-apply(log2(normalized_counts),2,density)
+data_density
+#set the x and y limit of the plot
+xlim<-0;ylim<-0
+for(i in 1:length(data_density)){
+  xlim<-range(c(xlim,data_density[[i]]$x));
+  ylim<-range(c(ylim,data_density[[i]]$y))
+}
+xlim
+cols<-rainbow(length(data_density))
+cols
+ltys<-rep(1,length(data_density))
+plot(data_density[[1]],xlim=xlim,ylim=ylim,type="n",
+     ylab="Smoothing density of normalized_log2-cpm",main="Normalized Distribution of HCC and MDA treated with ETOH or DEX",xlab="normalized counts in log2-cpm", cex.lab=0.8)
+for (i in 1:length(data_density)) {lines(data_density[[i]],col=cols[[i]],lty=ltys)
+}
+#create legend
+legend("topright", colnames(log_cpm_data),col=cols, lty=ltys, 
+       cex=0.75, border ="blue",text.col = "green4",merge = TRUE, 
+       bg = "gray90")
+
+```
+
+### PCA representation
+
+From this PCA graph, the structure is really clear and the data is strong. There is little variation between replicates when grouping by treatment. The pattern is also clear when grouping by cell lines
+
+
+```{r}
+
+plotMDS(d_TMM,labels = rownames(samples),
+        col=sample(cols,replace = FALSE)[factor(samples$treatment)])
+plotMDS(d_TMM,labels = rownames(samples),
+        col=sample(cols,replace = FALSE)[factor(samples$cell_lines)])
+```
+
+
+### Dispersion
+
+Small variation as indicated by the graph 
+
+```{r}
+#dispersion: how much your variance deviates for the mean 
+#low count high variation
+model<-model.matrix(~samples$treatment+samples$cell_lines+0)# ?? what is 0 
+dispersion<-estimateDisp(d_TMM,model)
+plotBCV(dispersion,col.tagwise = "blue",col.common = "red")
+```
+
+### Identifier mapping
+
+Because the original ensembl id comes with version number and I would lost a lot of information if I use ensembl id with version number to map, therefore, I got rid of version number at the beginning in the splitting variable step 
+
+```{r,echo=FALSE,results='hide'}
+#get the right dataset
+listMarts()
+# different version maybe better mapping for data at that year
+listEnsemblArchives()
+#connect to the desired mart
+ensembl<-useMart("ensembl")
+#get the human dataset
+datasets<-listDatasets(ensembl)
+kable(head(datasets[grep(datasets$dataset,pattern ="sapiens"),]),format = "html")
+ensembl=useDataset("hsapiens_gene_ensembl",mart = ensembl)
+```
+
+
+
+```{r,echo=FALSE,results='hide'}
+#make sure your dataset's gene name is correct 
+#we want to map our ensemble id to HGNC symbol
+#we are going to get both ensemble id and HGNC symbol back in order to join the table 
+
+#filter
+dim(listFilters(ensembl))# a lot
+all_biomart_human_filter<-listFilters(ensembl)
+kable(all_biomart_human_filter[grep(all_biomart_human_filter$name,pattern="ensembl"),],format = "html")# 52 is what I want
+# ENST is transcript, ENSG is gene, ENSP is protein
+#search for a given attribute, in this case HGNC id 
+kable(searchAttributes(mart=ensembl,"hgnc"),format="html")
+```
+
+
+```{r,echo=FALSE}
+conversion<-"basal_cell_line.rds"
+if(file.exists(conversion)){
+  basal_cell_line<-readRDS(conversion)
+}else{
+  basal_cell_line<-getBM(attributes = c("ensembl_gene_id","hgnc_symbol"),
+                    filters = "ensembl_gene_id",
+                    value = exp_data_filtered$gene_id,
+                    mart = ensembl)
+  saveRDS(basal_cell_line,conversion)
+}
+```
+
+
+```{r,echo=FALSE, results="hide"}
+length(which (rownames(normalized_counts)%in%
+         basal_cell_line$ensembl_gene_id))
+nrow(normalized_counts)
+not_mapped = length(which (rownames(normalized_counts)%in%
+         basal_cell_line$ensembl_gene_id)) - nrow(normalized_counts)
+
+```
+
+
+```{r,echo=FALSE}
+#merge
+normalized_counts_merge <- merge(basal_cell_line,normalized_counts,
+                                 by.x = 1, by.y = 0, all.y=TRUE)
+kable(normalized_counts_merge[1:5,1:5],type = "html")
+#how many are missing
+ensembl_id_missing_gene <- normalized_counts_merge$ensembl_gene_id[
+  which(is.na(normalized_counts_merge$hgnc_symbol))]
+no_symbol = length(ensembl_id_missing_gene) 
+old_mapping <- merge(exp_data_filtered[,1:2],data.frame(ensembl_id_missing_gene),by.x = 2,by.y = 1)
+kable(old_mapping[1:10,], type="html")
+kable(old_mapping[grep(old_mapping$gene_name, pattern = "^RP")[1:6],],type="html")
+count = nrow(old_mapping[grep(old_mapping$gene_name, pattern = "^RP"),])
+17605/19085 *100
+```
+I merge the data set and `r no_symbol` observations are missing, `r count`are ribosomal genes but it is not really important for this dataset. The coverage now is 92%
+
+```{r,warning=FALSE}
+missing_ids_subset <- normalized_counts_merge[   which(is.na(normalized_counts_merge$hgnc_symbol)),]
+missing_ids_subset_withids <- merge(old_mapping,missing_ids_subset,by.x=1,by.y=1)
+missing_ids_subset_withids <- missing_ids_subset_withids[-3]
+colnames(missing_ids_subset_withids)[1:2] <- colnames(normalized_counts_merge)
+finalized_normalized_counts <-rbind(normalized_counts_merge[which(!is.na(normalized_counts_merge$hgnc_symbol)),],missing_ids_subset_withids)
+
+```
+
+## Interpretation
+
+*1 What are the control and test conditions of the dataset?
+
+Depending on the cell line, the control is the cell line treated with ethanol and the test condition if the cell line treated with dexamethasone
+
+*2 Why is the dataset of interest to you?
+
+I am interested in this dataset because cancer is a really complicate and heterogeneous. There are diverse sub-clones for each cancer and no cancer cells are alike. It is always interested and therapeutic relevant to find out what are the factors controlling the formation each sub-type. 
+
+*3 Were there expression values that were not unique for specific genes?
+
+As indicated in the Filter low count section, there are multiple value  mapping to Y_RNA and 5s_rRNA and some NA ( it RNA and rRNA in the table because I split the first variable according to "_" )
+NA is likely due to splitting error 
+
+*4 Were there expression values that could not be mapped to current HUGO symbols?
+
+Yes, there are `r not_mapped` genes  that can not mapped, `r no_symbol ` do not have HGNC symbol.  `r count `  are ribosomal protein which is not really important for this analysis
+
+*5 How did you handle replicates?
+
+Because of the structure of my dataset, I chose a different strategy. I first group by cell line, and within each cell line,  there are three replicates for each condition (ETOH and DEX). I filter out count per million < 3. Basically, if in either cell line, the total count of a gene is greater than count per million < 3, I will keep the data. This might accidentally keep some unwanted data but at least I won't miss any important data. 
+
+*6 How many outliers were removed?
+
+None because the paper has not indicated any reason for removing any outliers and the distribution looks normal. 
+
+*7
+I was able to added back the missing HUGO symbol, the final coverage is around 92%
+
+
+
+
+
+
