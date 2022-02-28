@@ -322,7 +322,15 @@ None because the paper has not indicated any reason for removing any outliers an
 *7
 I was able to added back the missing HUGO symbol, the final coverage is around 92%
 
+### Citation 
 
+Isserlin, R. (2021). Lecture 3: Different Platforms for measuring Expression Datameasuring Expression Data. BCB420 - Computational System Biology. 
+
+Isserlin, R. (2021). Lecture 4: Exploring the data and basics of Normalization. BCB420 - Computational System Biology. 
+
+Isserlin, R. (2021). Lecture 5: Data exploration and Identifier mapping. BCB420 - Computational System Biology. 
+	
+Conway ME, McDaniel JM, Graham JM, Guillen KP et al. STAT3 and GR Cooperate to Drive Gene Expression and Growth of Basal-Like Triple-Negative Breast Cancer. Cancer Res 2020 Oct 15;80(20):4355-4370.
 
 
 
