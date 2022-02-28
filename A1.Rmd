@@ -324,7 +324,7 @@ I was able to added back the missing HUGO symbol, the final coverage is around 9
 
 ### Citation 
 
-Isserlin, R. (2021). Lecture 3: Different Platforms for measuring Expression Datameasuring Expression Data. BCB420 - Computational System Biology. 
+Isserlin, R. (2021). Lecture 3: Different Platforms for measuring Expression Datameasuring Expression Data. BCB420 - Computational System Biology.
 
 Isserlin, R. (2021). Lecture 4: Exploring the data and basics of Normalization. BCB420 - Computational System Biology. 
 
