@@ -18,7 +18,11 @@ link-citations: true
 
 # Description of my data
 
-In the last assignment, I was working with gene expression data  pulling from Geo with id GSE152201. This dataset describes the experiment done for two breast cancer cell lines; HCC70 and MDA. HCC70 is a basal cell line while MDA is a meschemyal cell line. Each cell line was treated with a control(ETOH), and a treatment(DEX) with three replicates each. DEX is a inducer of GR, the experiment is trying to find out what genes are upreguated by this inducer. Complemented by other experiments, they ultimately wanted to show that GR coordinates with STAT3 to active gene expression signature for basal-like triple-negative breast cancer.[@conway2020GR]
+link to the [data source](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152201) 
+
+paper : Article : STAT3 and GR cooperate to drive gene expression and growth of basal-like triple-negative breast cancer[@conway2020GR]
+
+In the last assignment, I was working with gene expression data  pulling from Geo with id GSE152201. his dataset describes the experiment about  two breast cancer cell lines; HCC70 and MDA. HCC70 is a basal cell line while MDA is a meschemyal cell line. Each cell line was treated with a ethanol control, and a treatment (DEX) with three replicates each. DEX is a inducer of GR, the experiment is trying to find out what genes are unregulated by this inducer. Complemented by other experiments, they ultimately wanted to show that GR coordinates with STAT3 to active gene expression signature for basal-like triple-negative breast cancer.
 
 For this dataset,I filtered the gene that has count per million less than 3 for each cell line, normalizing by treatment using EdgeR. I also mapped the ensembl gene id to HGNC symbol using Biomart and merged the HGNC symbol that was originally existed in my dataset to the unmapped HGNC symbol.The final coverage above 95%
 
@@ -159,10 +163,10 @@ colnames(gr_dex_samples) <-c("dex_samples")
 
 # Run a t test
 t_test<-t.test(x=t(gr_etoh_samples),y=t(gr_dex_samples))
-DT::datatable(t(broom::tidy(t_test)) ,caption  = "Table 1 : T test result for GR(NR3C1) gene")
+DT::datatable(broom::tidy(t_test) ,caption  = "Table 1 : T test result for GR(NR3C1)", options = list(scrollX = T))
 ```
 
-[@broom;@lecture6]
+[@broom;@lecture6;@DT]
 
 
 ## Grouping
@@ -411,11 +415,14 @@ I used Benjamini-Hochberg(BH) for multiple hypothesis testing correction there a
 I choose GO biological processes , Reactome and Wikipathway.I choose those becuase I am interested in biological pathway annotation and those three are popular and free. I want my initial analysis to be high quality so I exclude electronic version of GO.
 
 I am using the following version as shown in the [gprofiler web server](https://biit.cs.ut.ee/gprofiler/gost)-Data sources - Show data versions
+
 *GO:BP – annotations: BioMart, classes:releases/2021-12-15
+
 *REAC – annotations: BioMart,classes: 2022-1-3
+
 *WP – 2021-12-10
 
-Some code in this section references a publication about gprofiler2[@gprofiler2]
+Some code in this section references a publication about gprofiler2[@gprofiler2].
 
 ```{r}
 # up-regulated subset
@@ -441,7 +448,7 @@ df_up_ordered <-df_up[order(df_up$p_value),]
 up_genesets<-nrow(df_up)
 
 # construct a table about enrichment results
-DT::datatable(df_up_ordered[,c(2,3,4,9,10,11)],caption = "Enrichment analysis for up-regulated genes", options = list(scrollX=T))
+DT::datatable(df_up_ordered[,c(2,3,4,9,10,11)],caption = " Table 6 : Enrichment analysis for up-regulated genes", options = list(scrollX=T))
 ```
 
 ```{r,fig.cap='Figure 6: Enrichment plot for up-regulated genes', fig.dim=c(10,10)}
@@ -469,7 +476,7 @@ df_down_ordered <-df_down[order(df_down$p_value),]
 down_genesets<-nrow(df_down)
 
 # construct a table about enrichment results
-DT::datatable(df_down_ordered[,c(2,3,4,9,10,11)],caption = " Enrichment analysis for down-regulated genes", options = list(scrollX=T))
+DT::datatable(df_down_ordered[,c(2,3,4,9,10,11)],caption = " Table 7 : Enrichment analysis for down-regulated genes", options = list(scrollX=T))
 
 ```
 
@@ -496,7 +503,7 @@ df_whole_ordered<-df_whole[order(df_whole$p_value),]
 
 whole_genesets<-nrow(df_whole)
 # construct a table about enrichment results
-DT::datatable(df_whole_ordered[,c(2,3,4,9,10,11)],caption = " Enrichment analysis for down-regulated genes", options = list(scrollX=T))
+DT::datatable(df_whole_ordered[,c(2,3,4,9,10,11)],caption = " Table 8 : Enrichment analysis for down-regulated genes", options = list(scrollX=T))
 
 
 ```
@@ -509,7 +516,7 @@ p3_whole<-publish_gostplot(p3, highlight_terms = df_whole_ordered$term_id[1:10])
 
 ```
 
-[@gprofiler2,@DT]
+[@gprofiler2;@DT]
 
 I have included three links to the gprofiler web server my enrichment analysis results.
 
@@ -529,7 +536,7 @@ Comparing enrichment analysis results from using only up or down-regulated gene 
 
 # Interpretation
 ### Q1 and Q2
-Yes, the enrichment analysis for up regulated genes supports the result of the paper that GR  actives gene expression signature for basal-like triple-negative breast cancer. This is because among the 10 significant genesets in the enrichment analysis, NF-kB stimulates proliferation and stops programmed cell death in many cell types including basal breast cancer cells[@NFkB]. Also,receptor tyrosine kinases is an important signalling pathway that is involved in breast cancer[@rtk]
+Yes, the enrichment analysis for up regulated genes supports the result of the paper that GR  actives gene expression signature for basal-like triple-negative breast cancer. This is because among the 10 significant genesets in the enrichment analysis, NF-kB stimulates proliferation and stops programmed cell death in many cell types including basal breast cancer cells[@NFkB]. Also,receptor tyrosine kinases is an important signalling pathway that is involved in breast cancer[@rtk].
 
 Because MDA is a stem cell line. There are some other top hits that are related to stem cell characteristics. 
 However, because here I just analyzed differential expression after the induction of GR not STAT3, My analysis cannot confidently support the final conclusion of the paper that STAT3 and GR coordinates to active  basal-like triple-negative breast cancer.

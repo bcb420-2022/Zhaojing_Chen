@@ -40,6 +40,8 @@ library(DT)
 Package references used in A1
 [@biocmanager;@geometadb;@edger;@knitr;@tidyverse;@biomart;@geoquery;@DT;@lecture4;@lecture5]
 
+link to the [data source](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152201) 
+
 
 ```{r,echo=FALSE,results='hide',message=FALSE,warning=FALSE}
 # GEO description of my dataset
@@ -289,17 +291,18 @@ missing_ids_subset_withids <- missing_ids_subset_withids[-3]
 # set the same column names
 colnames(missing_ids_subset_withids)[1:2] <- colnames(normalized_counts_merge)[1:2]
 # bind the old mapping with the rows that have missing hgnc symbol
-finalized_normalized_counts<-rbind(normalized_counts_merge[which(!is.na(normalized_counts_merge$hgnc_symbol)),],missing_ids_subset_withids)
+finalized_normalized_counts<-rbind(normalized_counts_merge[which(!is.na(normalized_counts_merge$hgnc_symbol)),],missing_ids_subset_withids)#16948 rows
 ```
 
 ```{r}
-# drop some NAs
-finalized_normalized_counts <- normalized_counts_merge %>% drop_na(.)
-# check and filter duplicated ensembl id
-length(unique(finalized_normalized_counts$ensembl_gene_id))
-length(unique(finalized_normalized_counts$hgnc_symbol))
-finalized_normalized_counts <- distinct(finalized_normalized_counts, ensembl_gene_id, .keep_all = TRUE) 
+#check NAs
 any(is.na(finalized_normalized_counts$hgnc_symbol))
+# check and filter duplicated ensembl id
+duplicates_ensembl<-length(finalized_normalized_counts$ensembl_gene_id)-length(unique(finalized_normalized_counts$ensembl_gene_id))# 83rows
+finalized_normalized_counts <- distinct(finalized_normalized_counts, ensembl_gene_id, .keep_all = TRUE) # 16865 rows 
+
+
+
 
 
 #write.table(finalized_normalized_counts, file =  file.path(getwd(),"Data",                 "GSE152201_finalized_normalized_counts_mda_2022.txt"), sep = "\t")
