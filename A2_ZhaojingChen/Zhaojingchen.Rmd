@@ -541,6 +541,9 @@ Yes, the enrichment analysis for up regulated genes supports the result of the p
 Because MDA is a stem cell line. There are some other top hits that are related to stem cell characteristics. 
 However, because here I just analyzed differential expression after the induction of GR not STAT3, My analysis cannot confidently support the final conclusion of the paper that STAT3 and GR coordinates to active  basal-like triple-negative breast cancer.
 
+### Journal link
+[A2](https://github.com/bcb420-2022/Zhaojing_Chen.git)
+
 
 
 # Citations 
