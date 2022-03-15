@@ -1,0 +1,305 @@
+---
+title: "MDA cell line normalization"
+output:
+  html_document:
+    toc: TRUE
+bibliography : A2.bib
+---
+```{r}
+knitr::opts_chunk$set(
+  warning = FALSE, message = FALSE,echo = TRUE, results = "hide", tidy = TRUE)
+```
+
+
+
+# A1 : Data Exploration, normalization, and mapping
+
+## Set up 
+```{r,setup, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+if (!requireNamespace("BiocManager",quietly = TRUE)){
+  install.packages("BiocManager")}
+library(BiocManager)
+if (!requireNamespace("GEOmetadb",quietly = TRUE)){
+  BiocManager::install('GEOmetadb')}
+if (!requireNamespace("GEOquery",quietly = TRUE)){
+  BiocManager::install('GEOquery')}
+if (!requireNamespace("edgeR",quietly = TRUE)){
+  BiocManager::install("edgeR")}
+if (!requireNamespace("biomaRt",quietly = TRUE)){
+  BiocManager::install("biomaRt")}
+if (!requireNamespace("DT",quietly = TRUE)){
+  install.packages('DT')}
+library(knitr)
+library(edgeR)
+library(tidyverse)
+library(GEOmetadb)
+library(biomaRt)
+library(DT)
+```
+
+Package references used in A1
+[@biocmanager;@geometadb;@edger;@knitr;@tidyverse;@biomart;@geoquery;@DT;@lecture4;@lecture5]
+
+
+```{r,echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+# GEO description of my dataset
+# GSE Series Matrix only specific for microarray 
+
+GSE152201<-getGEO("GSE152201", GSEMatrix=FALSE)
+#Meta() get meta data
+DT::datatable(data.frame(head(Meta(GSE152201))), options = list(scrollX=T))
+GPLList(GSE152201)
+head(Meta(GSE152201))
+# get current flatform 
+current_platform=names(GPLList(GSE152201))[1]
+# information about the platform
+current_platform_infor = Meta(getGEO(current_platform))
+names=names(current_platform_infor)
+names
+```
+
+## Basic information about my dataset 
+
+**Platform title**:`r current_platform_infor$title`
+
+**Submission data**:`r current_platform_infor$submission_date`
+
+**Last update data**:`r current_platform_infor$last_update_date`
+
+**Organism**:`r current_platform_infor$last_update_date`
+
+**Number of GEO datasets that use this technology**:`r length(current_platform_infor$series_id)`
+
+**Number of GEO samples that use this technology**: `r length(current_platform_infor$sample_id)`
+
+```{r}
+# get supplementary file 
+seq_files =getGEOSuppFiles("GSE152201")
+file_name =rownames(seq_files)
+file_name
+exp_data = read.delim(file_name[1],header=TRUE,check.names = FALSE)
+head(exp_data)
+```
+
+
+
+```{r,echo=FALSE,message=FALSE}
+#look at the data first 
+colnames(exp_data)[1]<-"ensembl_id"
+DT::datatable(data.frame(exp_data[1:5,c(1,2,5,8,11)]), options = list(scrollX=T))
+# the first column is not what I want, break into two column
+exp_data<-exp_data %>% separate(ensembl_id,c("gene_name","gene_id"),sep = "\\_",extra = "merge", fill = "right")
+exp_data<-exp_data %>% separate(gene_id,c("gene_id"),extra = "drop")
+```
+
+
+
+## Sample Data table
+
+My dataset contains data of two cell lines, I am using the data from the MDA cell line
+```{r, results='hold'}
+# My dataset contains data of two cell lines, I am using the data from the MDA cell line
+DT::datatable(data.frame(exp_data[1:5,c(1,2,9:14)]), options = list(scrollX=T),caption = "Table 1 :My data sample")
+
+```
+[@DT]
+
+```{r,echo=FALSE}
+# define the group
+samples <- data.frame(lapply(colnames(exp_data)[9:14],FUN=function(x){unlist(strsplit(x, split = "\\_"))[c(1,2,4)]})) 
+colnames(samples) <- colnames(exp_data)[9:14] 
+rownames(samples) <- c("cell_lines","treatment","replicates") 
+samples <- data.frame(t(samples))
+knitr::kable(samples[1:6,1:3],format = "html")
+```
+
+## Filter low count
+
+```{r, results='hide'}
+# select the mda cell line data
+exp_data_mda <-exp_data[,c(1,2,9:14)]
+# converts it to count per million
+count_per_million_mda=cpm(exp_data[,3:8])
+# change the row name
+rownames(count_per_million_mda)<-exp_data_mda[,"gene_id"]
+# keep cpm greater than 3 per row
+keep = rowSums(count_per_million_mda>1 ) >= 3
+exp_data_filtered =exp_data_mda[keep,]
+summarised_gene_count <-sort(table(exp_data_filtered$gene_id),decreasing = TRUE)
+# sort it in decreasing order 
+summarised_gene_count_unfiltered <-sort(table(exp_data_mda$gene_id),decreasing = TRUE)
+# show an example
+
+knitr::kable(summarised_gene_count[which(summarised_gene_count>1)][1:6],format = "html")
+dim(exp_data_mda)
+#how many genes are keptn
+low_count_filtered<-nrow(exp_data_filtered)
+```
+
+## Visulize distribution after Normalization
+
+```{r}
+# filter outlier using normalization 
+filtered_data_matrix <- as.matrix(exp_data_filtered[,3:8]) 
+# change the row names
+rownames(filtered_data_matrix) <- exp_data_filtered$gene_id
+# create a DGEList for normalization
+d = DGEList(counts=filtered_data_matrix, group=samples$treatment)
+#calculate normalization factor
+d_TMM = calcNormFactors(d)
+normalized_counts <- cpm(d_TMM)
+#number of outlier filtered
+nrow(exp_data_filtered)-nrow(normalized_counts)
+```
+
+
+```{r,echo=FALSE,message=FALSE,results="hide"}
+#normalized plot
+log_cpm_data<-log2(cpm(exp_data_filtered[,3:8]))
+data_density<-apply(log2(normalized_counts),2,density)
+data_density
+#set the x and y limit of the plot
+xlim<-0;ylim<-0
+for(i in 1:length(data_density)){
+  xlim<-range(c(xlim,data_density[[i]]$x));
+  ylim<-range(c(ylim,data_density[[i]]$y))
+}
+#color
+cols<-rainbow(length(data_density))
+#lines
+ltys<-rep(1,length(data_density))
+#plot
+plot(data_density[[1]],xlim=xlim,ylim=ylim,type="n",
+     ylab="Smoothing density",main="Figure 1: Normalized Distribution", sub = "MDA cell line" ,xlab="normalized counts in log2-cpm", cex.lab=0.8)
+for (i in 1:length(data_density)) {lines(data_density[[i]],col=cols[[i]],lty=ltys)
+}
+#create legend
+legend("topright", colnames(log_cpm_data),col=cols, lty=ltys, 
+       cex=0.6, border ="blue",text.col = "green4",merge = TRUE, 
+       bg = "gray90")
+```
+[@edger]
+
+```{r,echo=FALSE,include=FALSE}
+# There is another PCA plot in A2 so I did not include this
+plotMDS(d_TMM,labels = rownames(samples),
+        col=sample(c("blue","red"))[factor(samples$treatment)])
+legend("topright",c("ETOH" ,"DEX"),pch = 19,fill = c("blue", "red"))
+title(main = " Principle Component Plot", sub = "MDA cell line")
+
+```
+
+## Dispersion
+
+Small variation as indicated by the graph 
+
+```{r,echo=FALSE}
+#dispersion: how much your variance deviates for the mean 
+#low count high variation
+model<-model.matrix(~samples$treatment+0)# 
+dispersion<-estimateDisp(d_TMM,model)
+plotBCV(dispersion,col.tagwise = "blue",col.common = "red")
+title(main = "Figure 2:  Dispersion Plot", sub = "MDA cell line")
+```
+[@edger]
+
+## Identifier mapping
+
+```{r,echo=FALSE,results='hide'}
+#get the right dataset
+listMarts()
+# different version maybe better mapping for data at that year
+listEnsemblArchives()
+#connect to the desired mart
+ensembl<-useMart("ensembl")
+#get the human dataset
+datasets<-listDatasets(ensembl)
+kable(head(datasets[grep(datasets$dataset,pattern ="sapiens"),]),format = "html")
+ensembl=useDataset("hsapiens_gene_ensembl",mart = ensembl)
+```
+
+```{r,echo=FALSE,results='hide'}
+#make sure your dataset's gene name is correct 
+#we want to map our ensemble id to HGNC symbol
+#we are going to get both ensemble id and HGNC symbol back in order to join the table 
+#filter
+dim(listFilters(ensembl))
+all_biomart_human_filter<-listFilters(ensembl)
+kable(all_biomart_human_filter[grep(all_biomart_human_filter$name,pattern="ensembl"),],format = "html")
+# ENST is transcript, ENSG is gene, ENSP is protein
+#search for a given attribute, in this case HGNC id 
+kable(searchAttributes(mart=ensembl,"hgnc"),format="html")
+```
+
+
+```{r}
+# map my ensembl id to hgnc symbol using the correct mart and biomart filter,  
+conversion_mda<-"mda_cell_line.rds"
+if(file.exists(conversion_mda)){
+  mda_cell_line<-readRDS(conversion_mda)
+}else{
+  mda_cell_line<-getBM(attributes = c("ensembl_gene_id","hgnc_symbol"),
+                    filters = "ensembl_gene_id",
+                    value = exp_data_filtered$gene_id,
+                    mart = ensembl)
+  saveRDS(mda_cell_line,conversion_mda)
+}
+```
+[@biomart]
+
+```{r,echo=FALSE, results="hold"}
+length(which (rownames(normalized_counts)%in%
+         mda_cell_line$ensembl_gene_id))
+nrow(normalized_counts)
+not_mapped = length(which (rownames(normalized_counts)%in%
+         mda_cell_line$ensembl_gene_id)) - nrow(normalized_counts)
+```
+
+
+```{r,echo=TRUE}
+#merge to include rest of the data
+normalized_counts_merge <- merge(mda_cell_line,normalized_counts,
+                                 by.x = 1, by.y = 0, all.y=TRUE)
+#how many are missing
+kable(normalized_counts_merge[1:5,1:5],type = "html",caption = "Table 3 : missing hgnc symbols")
+
+ensembl_id_missing_gene <- normalized_counts_merge$ensembl_gene_id[
+  which(is.na(normalized_counts_merge$hgnc_symbol))]#1207
+no_symbol = length(ensembl_id_missing_gene) 
+# old hgnc from my original dataset
+old_mapping <- merge(exp_data_filtered[,1:2],data.frame(ensembl_id_missing_gene),by.x = 2,by.y = 1)
+# some of the old hgnc symbol
+kable(old_mapping[1:10,], type="html",caption = " Table 4: unmapped ensembl id  found in original dataset")
+# how many ribosomal protein there are
+count = nrow(old_mapping[grep(old_mapping$gene_name, pattern = "^RP"),])
+```
+
+I merge the data set and `r no_symbol` observations are missing, `r count`are ribosomal genes but it is not really important for this dataset. The coverage now around 95%
+
+```{r, echo=TRUE}
+# missing hgnc symbol 
+missing_ids_subset <- normalized_counts_merge[   which(is.na(normalized_counts_merge$hgnc_symbol)),]
+# merge the missing symbol with old mapping
+missing_ids_subset_withids <- merge(old_mapping,missing_ids_subset,by.x=1,by.y=1)
+# filter out the NAs caused by the merge 
+missing_ids_subset_withids <- missing_ids_subset_withids[-3]
+# set the same column names
+colnames(missing_ids_subset_withids)[1:2] <- colnames(normalized_counts_merge)
+# bind the old mapping with the rows that have missing hgnc symbol
+finalized_normalized_counts<-rbind(normalized_counts_merge[which(!is.na(normalized_counts_merge$hgnc_symbol)),],missing_ids_subset_withids)
+```
+
+```{r}
+# drop some NAs
+finalized_normalized_counts <- normalized_counts_merge %>% drop_na(.)
+# check and filter duplicated ensembl id
+length(unique(finalized_normalized_counts$ensembl_gene_id))
+length(unique(finalized_normalized_counts$hgnc_symbol))
+finalized_normalized_counts <- distinct(finalized_normalized_counts, ensembl_gene_id, .keep_all = TRUE) 
+any(is.na(finalized_normalized_counts$hgnc_symbol))
+
+
+#write.table(finalized_normalized_counts, file =  file.path(getwd(),"Data",                 "GSE152201_finalized_normalized_counts_mda_2022.txt"), sep = "\t")
+```
+
+
