@@ -50,9 +50,9 @@ if (!requireNamespace("knitr",quietly = TRUE)){
   install.packages('knitr')}
 if (!requireNamespace("DT",quietly = TRUE)){
   install.packages('DT')}
-if (!requireNamespace("sjPlot",quietly = TRUE)){
-  install.packages('sjPlot')}
-library(sjPlot)
+if (!requireNamespace("broom",quietly = TRUE)){
+  install.packages('broom')}
+library(broom)
 library(gprofiler2)
 library(limma)
 library(ComplexHeatmap)
@@ -68,7 +68,7 @@ All packages references in A2
 
 
 
-```{r,include=FALSE}
+```{r,include=FALSE,eval=FALSE}
 # Load the MDA231 cell line data
 normalized_count_data <- read.table(file=file.path(getwd(),"data",
                                    "GSE152201_finalized_normalized_counts_mda_2022.txt"),
@@ -95,14 +95,17 @@ colnames(heatmap_matrix) <- colnames(normalized_count_data[,
 ## First scaled Heatmap
 
 ```{r,eval=FALSE,fig.cap='Figure 1: Initial heatmap for differential expression with row normalization'}
+
 # row normalized the data 
 heatmap_matrix <- t(scale(t(heatmap_matrix)))
-# some NAs, could be due to 0 variance
-heatmap_matrix <-data.frame(heatmap_matrix)
+heatmap_matrix<-data.frame(heatmap_matrix)
 # store 104 NAs 
 MDA_heatmap_missing <- heatmap_matrix %>% filter_all(any_vars(is.na(.)))
 # filter 104 NAs
 heatmap_matrix <- heatmap_matrix %>% drop_na(.)
+# some NAs, could be due to 0 variance
+# select the first 2000 ?
+#heatmap_matrix_2000<-heatmap_matrix[1:2000,]
 
 # set up the color gradient
 if(min(heatmap_matrix) == 0){
@@ -150,11 +153,11 @@ colnames(gr_dex_samples) <-c("dex_samples")
 #gr_dex_samples
 
 # Run a t test
-#t.test(x=t(gr_etoh_samples),y=t(gr_dex_samples))
-sjPlot::tab_model(t.test(x=t(gr_etoh_samples),y=t(gr_dex_samples)),title = "Table 1 : T test result for GR(NR3C1) gene")
+t_test<-t.test(x=t(gr_etoh_samples),y=t(gr_dex_samples))
+DT::datatable(t(broom::tidy(t_test)) ,caption  = "Table 1 : T test result for GR(NR3C1) gene")
 ```
 
-[@sjplot]
+[@broom;@lecture6]
 
 
 ## Grouping
@@ -299,6 +302,8 @@ current_heatmap <- Heatmap(as.matrix(heatmap_matrix_tophits),
                                show_column_names = TRUE,
                                show_row_names = FALSE,
                                show_heatmap_legend = TRUE,
+                           row_title = "normalized clustered genes",
+                           column_title = "mda_samples"
                                )
 current_heatmap
 
@@ -321,7 +326,7 @@ Gene sets are down-regulated in the control sample are up-regulated in the treat
 
 let us not cluster the genes but group controls and experiments 
 
-```{r,fig.cap='Figure 5:unclustered heatmap for significant differential expression with row normalization',eval=FALSE}
+```{r,fig.cap='Figure 5:unclustered heatmap for significant differential expression after correction',eval=FALSE}
 top_hits <- output_hits$ensembl_gene_id[
   output_hits$adj.P.Val<0.05]
 heatmap_matrix_tophits <- t(
@@ -345,7 +350,8 @@ current_heatmap <- Heatmap(as.matrix(heatmap_matrix_tophits),
                                col=heatmap_col,
                                show_column_names = TRUE,
                                show_row_names = FALSE,
-                               show_heatmap_legend = TRUE,
+                               show_heatmap_legend = TRUE, row_title = "normalized clustered genes",
+                           column_title = "mda_samples"
                                )
 current_heatmap
 
@@ -356,13 +362,14 @@ current_heatmap
 
 [@heatmap; @circlize; @lecture6]
 
+There is a  clear clusters of genes if we only inlcude genes that are significant after correction.
 
 
 # A2: Threshold and over-representation analysis
 
 
 
-```{r,include=FALSE}
+```{r,include=FALSE,eval=FALSE}
 
 #MDA_output_missing <- output_hits%>% filter_all(any_vars(is.na(.)))
 
@@ -432,7 +439,7 @@ DT::datatable(df_up_ordered[,c(2,3,4,9,10,11)],caption = "Enrichment analysis fo
 # plot the enrichment result
 p1<-gostplot(gp_up, interactive = FALSE)
 # highlight top ten hits
-publish_gostplot(p1, highlight_terms = df_up_ordered$term_id[1:10])
+p1_up<-publish_gostplot(p1, highlight_terms = df_up_ordered$term_id[1:10])
 
 # publish_gosttable(gp_up)
 
@@ -463,7 +470,7 @@ DT::datatable(df_down_ordered[,c(2,3,4,9,10,11)],caption = " Enrichment analysis
 # plot the enrichment result
 p2<-gostplot(gp_down, interactive = FALSE)
 # highlight top ten hits
-publish_gostplot(p2, highlight_terms = df_down_ordered$term_id[1:10])
+p2_down<-publish_gostplot(p2, highlight_terms = df_down_ordered$term_id[1:10])
 
 ```
 
@@ -489,11 +496,16 @@ DT::datatable(df_whole_ordered[,c(2,3,4,9,10,11)],caption = " Enrichment analysi
 # plot the enrichment result
 p3<-gostplot(gp_whole, interactive = FALSE)
 # highlight top ten hits
-publish_gostplot(p3, highlight_terms = df_whole_ordered$term_id[1:10])
+p3_whole<-publish_gostplot(p3, highlight_terms = df_whole_ordered$term_id[1:10])
 
 ```
 
 [@gprofiler2,@DT]
+
+I have included three links to the gprofiler web server my enrichment analysis results
+up : `r gp_up_link`
+down : `r gp_down_link`
+whole : `r gp_whole _link`
 
 ### Q3
 For term size between 0 and 200, threshold of 0.05 after BH correction. There are `r up_genesets` up-regulated genesets. There are `r down_genesets` down-regulated genesets. There are a total  `r whole_genesets` genesets using the whole list. 

@@ -2,7 +2,7 @@
 title: "MDA cell line normalization"
 output:
   html_document:
-    toc: TRUE
+    toc: true
 bibliography : A2.bib
 ---
 ```{r}
@@ -91,7 +91,7 @@ DT::datatable(data.frame(exp_data[1:5,c(1,2,5,8,11)]), options = list(scrollX=T)
 exp_data<-exp_data %>% separate(ensembl_id,c("gene_name","gene_id"),sep = "\\_",extra = "merge", fill = "right")
 exp_data<-exp_data %>% separate(gene_id,c("gene_id"),extra = "drop")
 ```
-
+[@geoquery;@DT;@lecture4]
 
 
 ## Sample Data table
@@ -135,7 +135,7 @@ dim(exp_data_mda)
 #how many genes are keptn
 low_count_filtered<-nrow(exp_data_filtered)
 ```
-
+[@lecture4]
 ## Visulize distribution after Normalization
 
 ```{r}
@@ -178,7 +178,7 @@ legend("topright", colnames(log_cpm_data),col=cols, lty=ltys,
        cex=0.6, border ="blue",text.col = "green4",merge = TRUE, 
        bg = "gray90")
 ```
-[@edger]
+[@edger;@lecture4]
 
 ```{r,echo=FALSE,include=FALSE}
 # There is another PCA plot in A2 so I did not include this
@@ -201,7 +201,7 @@ dispersion<-estimateDisp(d_TMM,model)
 plotBCV(dispersion,col.tagwise = "blue",col.common = "red")
 title(main = "Figure 2:  Dispersion Plot", sub = "MDA cell line")
 ```
-[@edger]
+[@edger,@lecture4]
 
 ## Identifier mapping
 
@@ -284,7 +284,7 @@ missing_ids_subset_withids <- merge(old_mapping,missing_ids_subset,by.x=1,by.y=1
 # filter out the NAs caused by the merge 
 missing_ids_subset_withids <- missing_ids_subset_withids[-3]
 # set the same column names
-colnames(missing_ids_subset_withids)[1:2] <- colnames(normalized_counts_merge)
+colnames(missing_ids_subset_withids)[1:2] <- colnames(normalized_counts_merge)[1:2]
 # bind the old mapping with the rows that have missing hgnc symbol
 finalized_normalized_counts<-rbind(normalized_counts_merge[which(!is.na(normalized_counts_merge$hgnc_symbol)),],missing_ids_subset_withids)
 ```
@@ -302,4 +302,5 @@ any(is.na(finalized_normalized_counts$hgnc_symbol))
 #write.table(finalized_normalized_counts, file =  file.path(getwd(),"Data",                 "GSE152201_finalized_normalized_counts_mda_2022.txt"), sep = "\t")
 ```
 
+[@biomart;@lecture5;@knitr]
 
