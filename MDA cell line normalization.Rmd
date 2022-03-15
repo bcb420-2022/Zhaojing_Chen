@@ -136,6 +136,7 @@ dim(exp_data_mda)
 low_count_filtered<-nrow(exp_data_filtered)
 ```
 [@lecture4]
+
 ## Visulize distribution after Normalization
 
 ```{r}
@@ -178,7 +179,8 @@ legend("topright", colnames(log_cpm_data),col=cols, lty=ltys,
        cex=0.6, border ="blue",text.col = "green4",merge = TRUE, 
        bg = "gray90")
 ```
-[@edger;@lecture4]
+
+[@edger; @lecture4]
 
 ```{r,echo=FALSE,include=FALSE}
 # There is another PCA plot in A2 so I did not include this
@@ -201,6 +203,7 @@ dispersion<-estimateDisp(d_TMM,model)
 plotBCV(dispersion,col.tagwise = "blue",col.common = "red")
 title(main = "Figure 2:  Dispersion Plot", sub = "MDA cell line")
 ```
+
 [@edger,@lecture4]
 
 ## Identifier mapping
