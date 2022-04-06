@@ -56,6 +56,8 @@ if (!requireNamespace("DT",quietly = TRUE)){
   install.packages('DT')}
 if (!requireNamespace("broom",quietly = TRUE)){
   install.packages('broom')}
+if (!requireNamespace("tidyverse",quietly = TRUE)){
+  install.packages('tidyverse')}
 library(broom)
 library(gprofiler2)
 library(limma)
