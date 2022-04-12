@@ -6,7 +6,7 @@ output:
   html_document:
     fig_caption: TRUE
     toc: TRUE
-bibliography: ./A3/A3.bib
+bibliography: A3.bib
 params:
   analysis_name: mda_gsea
   working_dir: A3/data
