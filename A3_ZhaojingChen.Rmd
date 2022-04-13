@@ -370,7 +370,7 @@ response <- exportImage(output_network_file, type = "png")
 
 ```{r eval=TRUE,echo=FALSE}
 #path to my image 
-output_network_file <- file.path(getwd(),"images","initial_screenshot_network.png")
+output_network_file <- file.path(getwd(),"A3/images","initial_screenshot_network.png")
 # import my initial enrichment map 
 htmltools::img(src = knitr::image_uri(output_network_file), 
                alt = 'Initial Enrichment Map', 
@@ -432,7 +432,7 @@ exportImage(cluster1em_annot_png_file_name, type = "png")
 ```
 
 ```{r load annotation map,echo=FALSE,eval=TRUE}
-cluster1em_annot_png_file_name <- file.path(getwd(),"images","cluster1em_autoannot.png")
+cluster1em_annot_png_file_name <- file.path(getwd(),"A3/images","cluster1em_autoannot.png")
 htmltools::img(src = knitr::image_uri(cluster1em_annot_png_file_name), 
                alt = 'Initial Autoannot Theme Map', 
                style = 'caption-side: bottom; margin:0px auto;display:block;',
@@ -444,7 +444,7 @@ htmltools::img(src = knitr::image_uri(cluster1em_annot_png_file_name),
 As you can see from the last image, the layout of my annotated network is really unorganized, I manually adjust to to make it look nicer here and add the corresponding labels using the legend creator app from Cytoscape.
 
 ```{r publication figure,echo=FALSE,eval=TRUE}
-cluster1em_clean_annot_png_file_name <- file.path(getwd(),"images","cluster_clean_autoannotated.png")
+cluster1em_clean_annot_png_file_name <- file.path(getwd(),"A3/images","cluster_clean_autoannotated.png")
 
 htmltools::img(src = knitr::image_uri(cluster1em_clean_annot_png_file_name), 
                alt = 'Publication ready Annotated Enrichiment Map Legend', 
@@ -457,7 +457,7 @@ htmltools::img(src = knitr::image_uri(cluster1em_clean_annot_png_file_name),
 ```{r network collapse,eval=FALSE}
 collaps_map<-commandsGET('autoannotate collapse autoannotate summary')
 fitContent()
-collaps_annot_png_file_name <- file.path(getwd(),"images","collaps_summary_autoannot.png")
+collaps_annot_png_file_name <- file.path(getwd(),"A3/images","collaps_summary_autoannot.png")
 if(file.exists(collaps_annot_png_file_name)){
   #cytoscape hangs waiting for user response if file already exists.  Remove it first
   file.remove(collaps_annot_png_file_name)
@@ -468,7 +468,7 @@ exportImage(collaps_annot_png_file_name, type = "png")
 
 ```{r echo=FALSE,eval=TRUE}
 
-collaps_annot_png_file_name <- file.path(getwd(),"images","collaps_summary_autoannot.png")
+collaps_annot_png_file_name <- file.path(getwd(),"A3/images","collaps_summary_autoannot.png")
 htmltools::img(src = knitr::image_uri(collaps_annot_png_file_name), 
                alt = 'Collapsed Autoannot Summary Map', 
                style = 'caption-side : bottom;margin:0px auto;display:block;',"Figure 4 :This is a collapsed annotated network decribing connected themes using AutoAnnotate app, enriched gene sets are clustered and collapsed by descriptions, unclustered gene sets are omitted in this map")
@@ -524,7 +524,7 @@ download.file(
 
 ```{r,eval=TRUE,echo=FALSE}
 
-tf_annot_png_file_name <- file.path(getwd(),"images","with_tf.png")
+tf_annot_png_file_name <- file.path(getwd(),"A3/images","with_tf.png")
 htmltools::img(src = knitr::image_uri(tf_annot_png_file_name), 
                alt = ' Autoannot Enrichment Map with Signature Gene Sets', 
                style = 'caption-side:bottom;margin:0px auto;display:block;'," Figure 5 : Annotated enrichment map describing overlapping genes in enriched datasets with the addition of sigificant Transcription factors(TFs) ZFHX3, STAT3, GR connected to targeted genes in the enriched geneset,type of lines are indicative of the magnitude of significane, dotted:<0.01 , line : <0.05,>0.01  ")
@@ -536,7 +536,7 @@ This is a collapsed network with the addition of annotated transcription factors
 
 ```{r,eval=TRUE,echo=FALSE}
 
-tf_collaps_annot_png_file_name <- file.path(getwd(),"images","tf_collapsed.png")
+tf_collaps_annot_png_file_name <- file.path(getwd(),"A3/images","tf_collapsed.png")
 htmltools::img(src = knitr::image_uri(tf_collaps_annot_png_file_name), 
                alt = ' Collapsed Enrichment Map with Signature Gene Sets', 
                style = 'caption-side:bottom;margin:0px auto;display:block;'," Figure 5 : Collapsed enrichment map describing overlapping genes in enriched datasets with the addition of sigificant Transcription factors(TFs) ZFHX3, STAT3, GR connected to targeted genes in the enriched geneset, node size decribe the geneset size within each cluster, colored nodes are genesets that are not clustered")
@@ -547,14 +547,14 @@ htmltools::img(src = knitr::image_uri(tf_collaps_annot_png_file_name),
 Since I believe genes and geneset that are more specific to TFs are important(i.e, specific TFs regulate specific gene sets), I select DNA damage response pathway, which is regulated by the GR Transcription factor specifically.
 
 ```{r eval=TRUE,echo=FALSE}
-rank_pathway_png_file_name <- file.path(getwd(),"images","DNAdamageresponse_rank.png")
+rank_pathway_png_file_name <- file.path(getwd(),"A3/images","DNAdamageresponse_rank.png")
 htmltools::img(src = knitr::image_uri(rank_pathway_png_file_name), 
                style = 'caption-side:bottom,margin:0px auto;display:block;'," Figure 6 : Annotated pathway describing genes that are upreguated or downreguated in the DNA damage response pathway, ordering by rank" )
 ```
 
 ```{r eval=TRUE,echo=FALSE}
 
-rank_pathway_png_file_name <- file.path(getwd(),"images","DNAdamage_logf.png")
+rank_pathway_png_file_name <- file.path(getwd(),"A3/images","DNAdamage_logf.png")
 htmltools::img(src = knitr::image_uri(rank_pathway_png_file_name), 
                style = 'caption-side:bottom;margin:0px auto;display:block;'," Figure 7 : Annotated pathway, log2 fold changes are colored, genes that are upreguated or downreguated in the pathway, ordering by log2 fold change")
 
@@ -691,7 +691,7 @@ A <- genes_all_gs
 B <- genes_enr_gs 
 C <- ranks[,1]
 # output png directory
-png(file.path(getwd(),"images","dark_matter_overlaps.png")) 
+png(file.path(getwd(),"A3/images","dark_matter_overlaps.png")) 
 # construct the Venn diagram
 draw.triple.venn( area1=length(A), area2=length(B), area3 = 
 length(C),
@@ -704,7 +704,7 @@ results","expression"),
                   cat.col = c("red","green","blue") 
 )
 
-htmltools::img(src = knitr::image_uri(file.path(getwd(),"images","dark_matter_overlaps.png")), 
+htmltools::img(src = knitr::image_uri(file.path(getwd(),"A3/images","dark_matter_overlaps.png")), 
                alt = 'Dark Analysis Venn Diagram', 
                style = 'caption-side:bottom;margin:0px auto;display:block;',"Figure 8 : This is a Venn Diagram generated using genes in the universe, enriched, and expression dataset, it describes the number of genes that from my initial expression dataset intersects with the universe geneset and the enriched genesets, green represents all entichment results, pink represent ")
 
