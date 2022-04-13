@@ -219,7 +219,7 @@ Table 1 : Top 5 GSEA returned pathways in the treatment group, this table descri
 
 ```{r GSEA results up,eval=TRUE,fig.cap= "Table 1 : Top 5 GSEA returned pathways in the treatment group, this table describes basic statiscs such as size, enrichemnt scpre, p and q value of the top 5 returned pathways in the treatment group  " }
 GSEAResults <- read.table(file = file.path(getwd(),"A3/data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
-knitr::kable(A3/data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
+knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
 
 ```
 
@@ -229,7 +229,7 @@ Table 2 : Top 5 GSEA returned pathways in the control group, this table describe
 
 ```{r GSEA results down, eval=TRUE, fig.cap="Table 2 : Top 5 GSEA returned pathways in the control group, this table describes basic statiscs such as size, enrichemnt scpre, p and q value of the top 5 returned pathways in the control group" }
 GSEAResults <- read.table(file = file.path(getwd(),"A3/data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
-knitr::kable(A3/data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
+knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
 ```
 
 
