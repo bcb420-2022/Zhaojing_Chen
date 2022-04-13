@@ -1,0 +1,849 @@
+---
+title: "A3:GSEA and Enrichment Map Analysis "
+author: "Zhaojing Chen"
+date:  "`r format(Sys.time(), '%d %b %Y')`"
+output:
+  html_document:
+    fig_caption: TRUE
+    toc: TRUE
+bibliography: A3.bib
+params:
+  analysis_name: mda_gsea
+  working_dir: A3/data
+  rnk_file: rank_final.rnk
+  run_gsea: yes
+  gsea_jar: /Users/chenzhaojing/Downloads/GSEA_4.2.3/gsea-cli.sh
+  gsea_directory: ''
+  fdr_thresh: 0.01
+  pval_thresh: 1
+  java_version: 11
+---
+
+# Introduction
+
+link to the [data source](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152201) used in this report. This data set is associated with the publication : STAT3 and GR cooperate to drive gene expression and growth of basal-like triple-negative breast cancer[@conway2020GR]. Since breast cancer exists in many different signature phenotype(i.e. clones). The authors wanted to identify what transcription factors are responsible for driving the basal-like triple-negative breast cancer
+
+This dataset describes the experiment about two breast cancer cell lines; HCC70 and MDA. HCC70 is a basal cell line while MDA is a meschemyal cell line. Each cell line was treated with a ethanol control, and a treatment (DEX) with three replicates each. DEX is a inducer of GR, the experiment is trying to find out what genes are unregulated by this inducer.
+
+In Assignment 1: Dataset Selection and Initial Processing" and "Assignment 2: Differential Gene Expression and Preliminary Gene Set Enrichment Analysis", can be found using this (link)[https://htmlpreview.github.io/?https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/Assignment-2.html]
+
+In the first assignment, I filtered the gene that has count per million less than 3 for each cell line, performed TMM normalization using EdgeR. I also mapped the ensembl gene id to HGNC symbol using Biomart and merged the HGNC symbol that was originally existed in my dataset to the unmapped HGNC symbol.The final coverage above 95%
+
+In the second assignment, I performed differential gene expression analysis on data from MDA cell line only, followed by thresholded gene enrichment analysis using gprofiler. In this enrichment analysis, I identified key pathways that are enriched from up-regulated expression ,down-regulate gene list and both.
+
+This report performs non-thresholded gene set enrichment analysis the data retrieved from GSE152201. The enrichment results are plotted in Enrichment maps. Post analysis are performed against transcription factor dataset retrieve from the baderlab data sets
+I realized that the collasped figures are not very clear, sorry for the inconvenience, but if you just zoom in a bit, you can see more clear about the description of the clusters.
+
+## Acknowledgements
+
+```{r load libraries,echo=FALSE,eval=FALSE}
+#install required R and bioconductor packages
+
+
+if (!requireNamespace("BiocManager",quietly = TRUE)){
+  install.packages('BiocManager')}
+library(BiocManager)
+if (!requireNamespace("RCurl",quietly = TRUE)){
+  BiocManager.install('RCurl')}
+
+library(RCurl)
+if (!requireNamespace("RCy3",quietly = TRUE)){
+  BiocManager.install('RCy3')}
+library(RCy3)
+
+
+```
+
+```{r,eval=TRUE,warning = FALSE, message = FALSE}
+if (!requireNamespace("BiocManager",quietly = TRUE)){
+  install.packages('BiocManager')}
+library(BiocManager)
+
+if (!requireNamespace("knitr",quietly = TRUE)){
+  install.packages('knitr')}
+if (!requireNamespace("htmltools",quietly = TRUE)){
+  install.packages('htmltools')}
+
+if (!requireNamespace("ComplexHeatmap",quietly = TRUE)){
+  BiocManager::install('ComplexHeatmap')}
+if (!requireNamespace("circlize",quietly = TRUE)){
+  install.packages('circlize')}
+
+if (!requireNamespace("GSA",quietly = TRUE)){
+  install.packages('GSA')}
+if (!requireNamespace("VennDiagram",quietly = TRUE)){
+  BiocManager::install('VennDiagram')}
+library(GSA)
+library(ComplexHeatmap)
+library(circlize)
+library(VennDiagram)
+```
+
+The GSEA software [@subramanian2005] was used to run gene set enrichment analysis. `GSA` [@gsa] was used to load and read GMT files Cytoscape [@cscytoscape], `RCy3` [@RCy3],Wikipathway[@wikipathways],EnrichmentMap[@em], AutoAnnotate [@auto_annotate], and NetworkAnalyzer[@network] were used to create, analyze, annotate, and visualize  enrichment maps and pathways. 
+
+`ComplexHeatmap` [@heatmap] was used to generate heatmaps of dark matter in the dark analysis section `BiocManager` [@biocmanager] was used to install `RCy3` and `ComplexHeatmap`. 
+
+`knitr`[@knitr] and `htmltool`[@htmltools] were used to create tables ant plots
+
+Analysis and codes are referenced from the BCB420 lecture notes[@Isserlin2022]
+
+
+# Non-threshold-GSEA
+
+## Q1: Parameters Setting
+
+I initially used the GSEA 4.2.3 desktop app to run pre-ranked GSEA, but later switch to using R to run pre-ranked GSEA with GSEA version 4.2.3 and JAVA 11. I used the Human_GOBP_AllPathways_no_GO_iea_April_01_2022_symbol geneset pulled from the Baderlab database. The parameter setting is shown below
+
+-   Number of Permutations: 1000 (default)
+-   Ranked list: my ranked gene set
+-   Collapse/ Remap to gene symbols: No collapse
+-   Chip platform: ftp.broadinstitute.org://pub/gsea/annotations_versioned/Human_HGNC_ID_MSigDB.v7.5.1.chip
+-   Basic Fields:
+    -   Max size: 200
+    -   Min size: 15
+
+However, I couldn't figure out when pulling from the docker, how to connect it to my laptop, so most of the code chunk is set not to evaluate but I was able to run on my labtop
+
+```{r}
+knitr::opts_chunk$set(
+  warning = FALSE, message = FALSE,echo = TRUE, tidy = TRUE,eval = TRUE)
+```
+
+## Configurable Parameters
+
+Get the specific parameter as specify in the param to run GSEA and plot enrichment maps
+
+```{r initialize parameters}
+# path to the gsea jar
+gsea_jar <- params$gsea_jar
+# java version
+java_version <- params$java_version
+# whether or not to run gsea
+run_gsea = params$run_gsea
+#directory of this file .
+working_dir <- params$working_dir
+# leave blank if you want the notebook to discover the gsea directory for itself
+gsea_directory = params$gsea_directory
+# gsea analysis name
+analysis_name <- params$analysis_name
+# path to your rank file 
+rnk_file <- params$rnk_file
+
+
+```
+
+## Download the latest pathway definition file
+
+```{r download baderlab gmt file,eval=FALSE, message=FALSE, warning=FALSE}
+
+# barberlab url
+gmt_url = "http://download.baderlab.org/EM_Genesets/current_release/Human/symbol/"
+
+#list all the files on the server
+filenames = getURL(gmt_url)
+tc = textConnection(filenames)
+contents = readLines(tc)
+close(tc)
+
+#get the gmt that has all the pathways and does not include terms inferred from electronic annotations(IEA) 
+# using regulat expression to match the desried file
+rx = gregexpr("(?<=<a href=\")(.*.GOBP_AllPathways_no_GO_iea.*.)(.gmt)(?=\">)",
+  contents, perl = TRUE)
+gmt_file = unlist(regmatches(contents, rx))
+
+# specify the path to the gsea gmt file that is to be downloaded
+dest_gmt_file <- file.path(working_dir,paste("Supplementary_Table1_",gmt_file,sep="") )
+
+download.file(
+    paste(gmt_url,gmt_file,sep=""),
+    destfile=dest_gmt_file
+)
+
+
+
+```
+
+------------------------------------------------------------------------
+
+## Run GSEA
+
+Specify the command to run preranked gsea with downloaded baderlab gmt file, 1000 permutation, no collapse, size between 15 and 200, random seed of 12345
+
+```{r run GSEA, eval=FALSE}
+# different command based on java version specified in the param
+if(run_gsea && java_version == "11"){
+  command <- paste("",gsea_jar,  "GSEAPreRanked -gmx", dest_gmt_file, "-rnk" ,file.path(working_dir,rnk_file), "-collapse false -nperm 1000 -scoring_scheme weighted -rpt_label ",analysis_name,"  -plot_top_x 20 -rnd_seed 12345  -set_max 200 -set_min 15 -zip_report false -out" ,working_dir, " > gsea_output.txt",sep=" ")
+  system(command)
+} else if (run_gsea) {
+  command <- paste("java  -Xmx1G -cp",gsea_jar,  "xtools.gsea.GseaPreranked -gmx", dest_gmt_file, "-rnk" ,file.path(working_dir,rnk_file), "-collapse false -nperm 1000 -permute gene_set -scoring_scheme weighted -rpt_label ",analysis_name,"  -num 100 -plot_top_x 20 -rnd_seed 12345  -set_max 200 -set_min 15 -zip_report false -out" ,working_dir, "-gui false > gsea_output.txt",sep=" ")
+  system(command)
+}
+```
+
+## Get the name of the GSEA output directory
+
+Get all the GSEA results directories found in the current directory. If there are multiple GSEA results folders the newest will be used to create an enrichment map.
+
+```{r compute results directory name,eval=FALSE}
+
+if(gsea_directory == ""){
+  gsea_directories <- list.files(path = working_dir, pattern = "\\.GseaPreranked")
+
+  #get the details on the files
+  details = file.info(file.path(getwd(),working_dir,gsea_directories))
+  #order according to newest to oldest
+  details = details[with(details, order(as.POSIXct(mtime),decreasing = TRUE)), ]
+
+  #use the newest file:
+  gsea_output_dir <- row.names(details)[1]
+} else {
+  gsea_output_dir <- gsea_directory
+}
+
+```
+
+## Q2 : Summarize your enrichment results
+
+I summarize my results by displaying the top 5 pathways returned for both treatment and control groups
+
+
+- There are 1972 genesets returned for the phenotype (DEX). The top gene returned for the controlled phenotype (EtOH) is `VALIDATED TRANSCRIPTIONAL TARGETS OF AP1 FAMILY MEMBERS FRA1 AND FRA2`. The p-value, ES, NES, and FDR associated with it are -0.71,-2.29,0.00, and 0.00 correspondingly.
+
+- There are 2871 genesets returned for the phenotype (DEX). The top geneset returned for the treatment phenotype is `CAP-DEPENDENT TRANSLATION INITIATION`. The p-value, ES, NES, and FDR associated with it are 0.71,2.97,0.00, and 0.00 correspondingly.
+
+
+For some reason, the captions for these two table doesn't show up.
+Here is the caption:
+
+Table 1 : Top 5 GSEA returned pathways in the treatment group, this table describes basic statistics such as size, enrichment score, p and q value of the top 5 returned pathways in the treatment group 
+
+```{r GSEA results up,eval=TRUE,fig.cap= "Table 1 : Top 5 GSEA returned pathways in the treatment group, this table describes basic statiscs such as size, enrichemnt scpre, p and q value of the top 5 returned pathways in the treatment group  " }
+GSEAResults <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
+knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
+
+```
+
+
+
+Table 2 : Top 5 GSEA returned pathways in the control group, this table describes basic statistics such as size, enrichment score, p and q value of the top 5 returned pathways in the control group
+
+```{r GSEA results down, eval=TRUE, fig.cap="Table 2 : Top 5 GSEA returned pathways in the control group, this table describes basic statiscs such as size, enrichemnt scpre, p and q value of the top 5 returned pathways in the control group" }
+GSEAResults <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
+knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
+```
+
+
+## Q3 : Compare GSEA results to ORA
+
+Result to ORA can be found in Assignment-2 under the section : (A2: Threshold and over-representation analysis)[https://htmlpreview.github.io/?https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/Assignment-2.html#enrichment-analysis-using-gprofiler2]
+
+For thresholded analysis,the top genesets returned for the up-regulated list is the`glucocorticoid receptor pathway`and the top genesets returned for the down-regulated list is `Downregulation of TGF-beta receptor signaling`. This result is completely different compared to the top genesets mention above returned by GSEA There are much more genesets returned from the GSEA analysis. While there are a total of 419 genesets using the whole thresholded list, there are more than 3000 genesets returned using GSEA.
+
+
+This is not a straightforward comparison. Even though we can see the difference in genesets between the two methods. The parameter settings and the purpose of the two analyses are different. It is hard to compare when the goal of GSEA is to find any possible enrichment geneset while gprofiler has a much strict threshold and looks for significant genesets
+
+# Visualize your Gene set Enrichment Analysis in Cytoscape
+
+## Make sure you can connect to Cytoscape
+
+Cytoscape must be open to run
+
+```{r initialize cytoscape connection,eval=FALSE}
+    cytoscapePing ()
+    cytoscapeVersionInfo ()
+```
+
+------------------------------------------------------------------------
+
+## list of Cytoscape apps to install
+
+This tells Cytoscape to check the status of list of app to install, install the app if not installed yet
+
+```{r installation suammry, eval=FALSE, fig.cap="Table3: This describes the summary of my list of app to insatlled, whether or not they are succssfully installed"}
+#list of app to install
+cyto_app_toinstall <- c("wikipathways", "enrichmentmap", "autoannotate","legend creator")
+
+# check if the apps are already installed, if not install it
+cytoscape_version <- unlist(strsplit( cytoscapeVersionInfo()['cytoscapeVersion'],split = "\\."))
+if(length(cytoscape_version) == 3 && as.numeric(cytoscape_version[1]>=3) 
+   && as.numeric(cytoscape_version[2]>=7)){
+  for(i in 1:length(cyto_app_toinstall)){
+    #check to see if the app is installed.  Only install it if it hasn't been installed
+    if(!grep(commandsGET(paste("apps status app=\"", cyto_app_toinstall[i],"\"", sep="")), 
+             pattern = "status: Installed")){
+      installation_response <-commandsGET(paste("apps install app=\"", cyto_app_toinstall[i],"\"", sep=""))
+      installation_responses <- c(installation_responses,installation_response)
+    } else{
+      installation_responses <-"Already Installed"
+    }
+  }
+  installation_summary <- data.frame(name = cyto_app_toinstall, 
+                                     status = installation_responses)
+  
+  knitr::kable(list(installation_summary),
+  booktabs = TRUE, caption = 'A Summary of automated app installation'
+)
+}
+```
+
+## Create an Enrichment map
+
+```{r enrichment map setup,eval=FALSE}
+
+#defined threshold for GSEA enrichments (need to be strings for cyrest call)
+pvalue_gsea_threshold <- params$pval_thresh # 1
+qvalue_gsea_threshold <- params$fdr_thresh # 0.01
+
+similarity_threshold <- "0.375"
+similarity_metric = "COMBINED"
+
+cur_model_name <- analysis_name
+
+# path to GSEA result
+gsea_results_path <- file.path(gsea_output_dir,"edb")
+gsea_results_filename <- file.path(gsea_results_path,"results.edb")
+
+# path the baderlab dataset used for GSEA 
+gmt_gsea_file <- file.path(getwd(), dest_gmt_file)
+
+# path to the rank file
+gsea_ranks_file <- file.path(gsea_results_path,list.files(gsea_results_path,pattern=".rnk"))
+
+```
+
+```{r create EM,eval=FALSE}
+#naming EM using gsea analysis name and it p ,q value
+current_network_name <- paste(cur_model_name,pvalue_gsea_threshold,qvalue_gsea_threshold,sep="_")
+
+# EM command
+em_command = paste('enrichmentmap build analysisType="gsea" gmtFile=',gmt_gsea_file,
+                   'pvalue=',pvalue_gsea_threshold, 'qvalue=',qvalue_gsea_threshold,
+                   'similaritycutoff=',similarity_threshold,
+                   'coefficients=',similarity_metric,'ranksDataset1=', 
+                   gsea_ranks_file,'enrichmentsDataset1=',gsea_results_filename, 'phenotype1Dataset1= Dex','phenotype2Dataset1=EtOH',
+                   'filterByExpressions=false'
+                   )
+#
+
+#enrichment map command will return the suid of newly created network.
+response <- commandsGET(em_command)
+
+current_network_suid <- 0
+#enrichment map command will return the suid of newly created network unless it Failed.  
+
+#If it failed it will contain the word failed
+if(grepl(pattern="Failed", response)){
+  paste(response)
+} else {
+  current_network_suid <- response
+}
+
+#check to see if the network name is unique
+current_names <- getNetworkList()
+if(current_network_name %in% current_names){
+  #if the name already exists in the network names then put the SUID in front
+  # of the name (this does not work if you put the suid at the end of the name)
+  current_network_name <- paste(current_network_suid,current_network_name,  sep="_")
+}
+response <- renameNetwork(title=current_network_name, 
+                          network = as.numeric(current_network_suid))
+
+
+```
+
+## Get a screen shot of the initial network.
+
+```{r get screenshot,eval=FALSE}
+
+fitContent()
+# create a path to your image 
+output_network_file <- file.path(getwd(),"A3/images","initial_screenshot_network.png")
+
+if(file.exists(output_network_file)){
+  #cytoscape hangs waiting for user response if file already exists.  Remove it first
+  response <- file.remove(output_network_file)
+} 
+
+response <- exportImage(output_network_file, type = "png")
+
+```
+
+```{r eval=TRUE,echo=FALSE}
+#path to my image 
+output_network_file <- file.path(getwd(),"images","initial_screenshot_network.png")
+# import my initial enrichment map 
+htmltools::img(src = knitr::image_uri(output_network_file), 
+               alt = 'Initial Enrichment Map', 
+               style="caption-side: bottom; margin:0px auto;display:block;", 
+    "Figure 1 : An initial enrichment map describing the overlapping genes between enriched gene sets, generating by the EnrichmentMap app in Cytoscape,color indicates normalized entichment score, red corrsponding to genesets enriched in the treatment group(DEX), color blue corrsponding to genesets enriched in the control group(ETOH)")
+
+```
+
+```{r EM summary,eval=FALSE, fig.cap=" Table 4 : This table describes the basic statistics such as nodes and edges about my initial enrichment map"}
+#get network statistics
+network = as.numeric(current_network_suid)
+sta_cmd <-paste('analyzer analyze directed=true network = 304')
+stat <- commandsGET(sta_cmd)
+knitr::kable(list(stat),
+  booktabs = TRUE, caption = 'Network statistics'
+)
+# number of nodes and edges
+num_node <-stat[2]
+num_edge <-stat[3]
+```
+
+## Q1 : Basic information and parameters about my network
+
+-   number of nodes : 1
+-   number of edges 2258
+-   Node Threshold:
+    -   p-value : 1.0
+    -   FDR Q -value : 0.01
+-   Network edge parameter:
+    -   Jaccard Overlap Combined : 0.375
+    -   Test used: Jaccard Overlap Combined Index (k constant = 0.5)
+
+## Intial Network Annotation Map
+
+## Q2: Annotation parameters
+
+I use AutoAnnotate, a Cytoscape app to annotate my network I will cluster nodes by their descriptions (so that pathways with similar descriptions are collapsed into a single node) and use the default MCL clustering algorithm.
+
+```{r autoannotation,eval=FALSE}
+#get the column from the node table and node table
+  nodetable_colnames <- getTableColumnNames(table="node",  network =  as.numeric(current_network_suid))
+# get the column with pattern "GS_DESCR" 
+  descr_attrib <- nodetable_colnames[grep(nodetable_colnames, pattern = "GS_DESCR")]
+
+#Autoannotate the network
+autoannotate_url <- paste("autoannotate annotate-clusterBoosted labelColumn=", descr_attrib," maxWords=3 ", sep="")
+current_name <-commandsGET(autoannotate_url)
+```
+
+```{r initial annotation map,eval=FALSE, }
+fitContent()
+cluster1em_annot_png_file_name <- file.path(getwd(),"A3/images","cluster1em_autoannot.png")
+if(file.exists(cluster1em_annot_png_file_name)){
+  #cytoscape hangs waiting for user response if file already exists.  Remove it first
+  file.remove(cluster1em_annot_png_file_name)
+  } 
+#export the network
+exportImage(cluster1em_annot_png_file_name, type = "png")
+```
+
+```{r load annotation map,echo=FALSE,eval=TRUE}
+cluster1em_annot_png_file_name <- file.path(getwd(),"images","cluster1em_autoannot.png")
+htmltools::img(src = knitr::image_uri(cluster1em_annot_png_file_name), 
+               alt = 'Initial Autoannot Theme Map', 
+               style = 'caption-side: bottom; margin:0px auto;display:block;',
+" Figure 2 : An EnrichmentMap of annotated enriched  by AutoAnnotate using gene set descriptions, this describes how gensets are clustered." )
+```
+
+## Manually Adjusted annotated Enrichment Map with legend
+
+As you can see from the last image, the layout of my annotated network is really unorganized, I manually adjust to to make it look nicer here and add the corresponding labels using the legend creator app from Cytoscape.
+
+```{r publication figure,echo=FALSE,eval=TRUE}
+cluster1em_clean_annot_png_file_name <- file.path(getwd(),"images","cluster_clean_autoannotated.png")
+
+htmltools::img(src = knitr::image_uri(cluster1em_clean_annot_png_file_name), 
+               alt = 'Publication ready Annotated Enrichiment Map Legend', 
+               style = ' caption-side: bottom; margin:0px auto;display:block;',
+               "Figure 3 : Manually adjusted  network of the annotated enrichment map produced above, describing enriched genesets clustered by description, color indicates the enrichment score, and node represents enriched geneset.")
+```
+
+## Collapsed network map
+
+```{r network collapse,eval=FALSE}
+collaps_map<-commandsGET('autoannotate collapse autoannotate summary')
+fitContent()
+collaps_annot_png_file_name <- file.path(getwd(),"images","collaps_summary_autoannot.png")
+if(file.exists(collaps_annot_png_file_name)){
+  #cytoscape hangs waiting for user response if file already exists.  Remove it first
+  file.remove(collaps_annot_png_file_name)
+} 
+#export the network
+exportImage(collaps_annot_png_file_name, type = "png")
+```
+
+```{r echo=FALSE,eval=TRUE}
+
+collaps_annot_png_file_name <- file.path(getwd(),"images","collaps_summary_autoannot.png")
+htmltools::img(src = knitr::image_uri(collaps_annot_png_file_name), 
+               alt = 'Collapsed Autoannot Summary Map', 
+               style = 'caption-side : bottom;margin:0px auto;display:block;',"Figure 4 :This is a collapsed annotated network decribing connected themes using AutoAnnotate app, enriched gene sets are clustered and collapsed by descriptions, unclustered gene sets are omitted in this map")
+```
+
+##Q4: theme of my collapsed network
+
+My networks themes are really separated, but the major theme of my network is related to translation. They fit the model because a lot of my top returned genesets are related to translation such as formation of translation initiation, degradation apc, mitochondrial translation. However, mitochondrial translation and electron transport chain are also documented to be where cancer cells obtain energy.[@etc] Also, STAT1,STAT2 are also implicated in breast cancer subtypes.[@stat] Therefore, I suspects those two groups, along with stat1,2 are related maybe progression or signature of basal triple negative breast cancer. Heart problem is also implicated in breast cancer patients so the heart conduction group is not really surprising.[@heart] In addition,cellular zinc homeostasis is altered typically in patience with lung,liver, and breast cancer[@zinc]. Overall, I did not find any new pathways
+
+# Post Analysis
+
+## Transcription factor analysis
+
+## Q1
+
+I choose to analyze my network using transcription factors (TFs) database because the purpose of the original paper was to identify transcription factors that are responsible for initiating triple-negative breast cancer phenotype. Parameters setting shown below
+
+-   Test : Mann-Whitney ( One-Sided Greater)
+-   Cut off : 0.05
+-   Genesets : Human_TranscriptionFactors_MSigdb_April_01_2022_symbol from baderlab
+
+I used Mann-Whitney Greater to run the analysis because I only want to look at my up regulated genes. I wanted to what genes are unregulated by the set of all TFs,especially I am looking for genes regulated by GR and STAT3(i.e. TFs identified in the paper).
+
+Nearly 80% of the transcription factor passed threshold which means more analysis is needed. An example is ZFHX3 in figure 5. However, those top returned TFs are more associated with nearly all genesets in the Translation Initiation and degradation apc clusters. In the paper, the authors identified STAT3 and GR cooperatively active initiation of triple-negative breast cancer. In my analysis, STAT3 and GR are significant but they are only connected few genesets and not ranked at the top. I suspect that because a major theme in this network is translation initiation, it is not surprising that a lots of transcription factor are returned and associated with many of the genesets in this cluster. However, we should pay more attention to those TFs that are more specific to specific genesets because that might be indicative of something irregular.
+
+```{r gmt file for transcription analysis,eval=FALSE}
+# Download transcription gmt file
+# barberlab url
+gmt_url = "http://download.baderlab.org/EM_Genesets/current_release/Human/symbol/TranscriptionFactors/"
+
+#list all the files on the server
+filenames = getURL(gmt_url)
+tc = textConnection(filenames)
+contents = readLines(tc)
+close(tc)
+
+#get the gmt that has all the pathways and does not include terms inferred from electronic annotations(IEA)
+
+#start with gmt file that has pathways only
+rx = gregexpr("(?<=<a href=\")(.*.TranscriptionFactors_MSigdb.*.)(.gmt)(?=\">)",
+  contents, perl = TRUE)
+tf_file = unlist(regmatches(contents, rx))
+
+# specify the path to the gmt file that is to be downloaded
+tf_gmt_file <- file.path(working_dir,paste("Supplementary_Table2_",tf_file,sep="") )
+
+download.file(
+    paste(gmt_url,tf_file,sep=""),
+    destfile=tf_gmt_file
+)
+
+```
+
+```{r,eval=TRUE,echo=FALSE}
+
+tf_annot_png_file_name <- file.path(getwd(),"images","with_tf.png")
+htmltools::img(src = knitr::image_uri(tf_annot_png_file_name), 
+               alt = ' Autoannot Enrichment Map with Signature Gene Sets', 
+               style = 'caption-side:bottom;margin:0px auto;display:block;'," Figure 5 : Annotated enrichment map describing overlapping genes in enriched datasets with the addition of sigificant Transcription factors(TFs) ZFHX3, STAT3, GR connected to targeted genes in the enriched geneset,type of lines are indicative of the magnitude of significane, dotted:<0.01 , line : <0.05,>0.01  ")
+```
+
+## Collapsed Network
+
+This is a collapsed network with the addition of annotated transcription factors ZFHX3, STAT3, GR
+
+```{r,eval=TRUE,echo=FALSE}
+
+tf_collaps_annot_png_file_name <- file.path(getwd(),"images","tf_collapsed.png")
+htmltools::img(src = knitr::image_uri(tf_collaps_annot_png_file_name), 
+               alt = ' Collapsed Enrichment Map with Signature Gene Sets', 
+               style = 'caption-side:bottom;margin:0px auto;display:block;'," Figure 5 : Collapsed enrichment map describing overlapping genes in enriched datasets with the addition of sigificant Transcription factors(TFs) ZFHX3, STAT3, GR connected to targeted genes in the enriched geneset, node size decribe the geneset size within each cluster, colored nodes are genesets that are not clustered")
+```
+
+## Pathway analysis
+
+Since I believe genes and geneset that are more specific to TFs are important(i.e, specific TFs regulate specific gene sets), I select DNA damage response pathway, which is regulated by the GR Transcription factor specifically.
+
+```{r eval=TRUE,echo=FALSE}
+rank_pathway_png_file_name <- file.path(getwd(),"images","DNAdamageresponse_rank.png")
+htmltools::img(src = knitr::image_uri(rank_pathway_png_file_name), 
+               style = 'caption-side:bottom,margin:0px auto;display:block;'," Figure 6 : Annotated pathway describing genes that are upreguated or downreguated in the DNA damage response pathway, ordering by rank" )
+```
+
+```{r eval=TRUE,echo=FALSE}
+
+rank_pathway_png_file_name <- file.path(getwd(),"images","DNAdamage_logf.png")
+htmltools::img(src = knitr::image_uri(rank_pathway_png_file_name), 
+               style = 'caption-side:bottom;margin:0px auto;display:block;'," Figure 7 : Annotated pathway, log2 fold changes are colored, genes that are upreguated or downreguated in the pathway, ordering by log2 fold change")
+
+```
+
+From this two figures, we can see that there is a balance up or down regulated gene in the pathway. However, this geneset is enriched in the treatment (Dex) group. This could mean that those down-regulated genes are down-regulated in response of those genes that are up-regulated.
+
+# Dark matter analysis
+
+## Loading All gene files
+
+To perform Dark analysis, I need genes form the universe geneset file, genes from my enriched gene sets, genes that are significant in the GSEA analysis, and genes in my rank file
+
+```{r eval=TRUE}
+# my universe dataset
+# load the gmt file
+gmt_file <- file.path(getwd(),"data",
+"Supplementary_Table1_Human_GOBP_AllPathways_no_GO_iea_April_01_2022_symbol.gmt") 
+# get all genes associated with the geneset in the universe gmt file
+capture.output(genesets<-
+GSA.read.gmt(gmt_file),file="gsa_load.out") 
+names(genesets$genesets) <- genesets$geneset.names
+```
+
+```{r eval=TRUE}
+#load the rank file
+ranks <- read.table(file.path(getwd(),"data","rank_final.rnk"), header = TRUE, sep = "\t", quote="\"", 
+                    stringsAsFactors = FALSE)
+ 
+```
+
+```{r eval=TRUE}
+# my enriched file
+
+enr_file1 <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t",quote="\"", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE,row.names = 1)
+# na_pos file
+enr_file2 <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t",quote="\"", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE,row.names = 1)
+
+
+```
+
+```{r eval=TRUE}
+#get the genes from the set of enriched pathway
+# all the genset names from my enrichment result
+all_enr_genesets<- c(rownames(enr_file1), rownames(enr_file2)) 
+genes_enr_gs <- c()
+# get all the genes if it in the corresponding geneset name and add it together in a list
+for(i in 1:length(all_enr_genesets)){ 
+  current_geneset <-
+unlist(genesets$genesets[which(genesets$geneset.names %in% 
+all_enr_genesets[i])])
+# all genes in our enrichment result
+  genes_enr_gs <- union(genes_enr_gs, current_geneset) 
+}
+```
+
+```{r eval=TRUE}
+# get all the genes in the significant genesets
+# set a threshold
+FDR_threshold <- 0.001
+#get the genes from the set of enriched pathways 
+all_sig_enr_genesets<- c(rownames(enr_file1)[
+  which(enr_file1[,7]<=FDR_threshold)],
+rownames(enr_file2)[which(enr_file2[,7]<=FDR_threshold)]) 
+
+
+genes_sig_enr_gs <- c()
+# all genes in the significant genesets
+for(i in 1:length(all_sig_enr_genesets)){
+  current_geneset <- unlist(genesets$genesets[
+    which(genesets$geneset.names %in% all_sig_enr_genesets[i])]) 
+  genes_sig_enr_gs <- union(genes_sig_enr_gs, current_geneset) 
+}
+```
+
+```{r eval=TRUE}
+# all significant gene from my expression dataset
+# Load the MDA231 cell line data
+up <- read.table(file=file.path(getwd(),"data",
+                                   "mda_upregulated_genes.txt"),
+                                    sep = "\t",
+                                    stringsAsFactors = FALSE, ) 
+down<- read.table(file=file.path(getwd(),"data",
+                                   "mda_downregulated_genes.txt"),
+                                    sep = "\t",
+                                    stringsAsFactors = FALSE, ) 
+
+# get all the significant genes in my expression dataset
+sig_express_genes <- rbind(up,down)
+for(i in 1:length(sig_express_genes)){
+  sig_express_genes <- unlist(sig_express_genes)}
+```
+
+## Finding Dark Matter
+
+Now I have all the gene ilst I need, I can identify dark matter in the following cases:
+
+-   Genes did not appear in any enriched gene sets
+-   Genes that don't have annotation
+-   any significant genes that are not annotated to any of the pathways returned in the enrichment analysis.
+-   any significant genes that are not annotated to any pathways in entire set of pathways used for the analysis
+
+```{r eval=TRUE}
+# count the number of genes in each geneset and expression
+# all genes in the universe
+genes_all_gs <- unique(unlist(genesets$genesets))
+all<-length(genes_all_gs)
+# genes in the enriched geneset
+enr<-length(genes_enr_gs)
+# genes that are significant in the enrichment analysis
+enr_sig<-length(genes_sig_enr_gs)
+# genes in my expression dataset
+express <-nrow(ranks)
+# all significant genes in my expression dataset
+sig_express <-length(sig_express_genes)
+```
+
+-   There are 18144 unique genes in my gene universe
+
+-   There are 16560 unique genes in my enrichment results
+
+-   There are 15512 unique genes in my expression dataset
+
+This looks great, nearly all my genes in my expression dataset are in the gene universe and in my enrichment results. To examine it further, I have created a Vnne diagram describing the relationship between these different datasets
+
+```{r eval=TRUE}
+# visulize number of genes in each sets using a Venn diagram
+if (!requireNamespace("VennDiagram",quietly = TRUE)){
+  install.packages('VennDiagram')}
+library(VennDiagram) 
+
+# three sets to visulize
+A <- genes_all_gs
+B <- genes_enr_gs 
+C <- ranks[,1]
+# output png directory
+png(file.path(getwd(),"images","dark_matter_overlaps.png")) 
+# construct the Venn diagram
+draw.triple.venn( area1=length(A), area2=length(B), area3 = 
+length(C),
+          n12 = length(intersect(A,B)), n13=length(intersect(A,C)), 
+          n23 = length(intersect(B,C)),
+          n123 = length(intersect(A,intersect(B,C))), 
+          category = c("all genesets","all enrichment 
+results","expression"),
+          fill = c("red","green","blue"), 
+                  cat.col = c("red","green","blue") 
+)
+
+htmltools::img(src = knitr::image_uri(file.path(getwd(),"images","dark_matter_overlaps.png")), 
+               alt = 'Dark Analysis Venn Diagram', 
+               style = 'caption-side:bottom;margin:0px auto;display:block;',"Figure 8 : This is a Venn Diagram generated using genes in the universe, enriched, and expression dataset, it describes the number of genes that from my initial expression dataset intersects with the universe geneset and the enriched genesets, green represents all entichment results, pink represent ")
+
+```
+
+This photo is broker, here is the link to a complete (Venn diagram)[https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/A3/images/dark_matter_overlaps.png]
+
+
+From this plot, we see that we have 4451 unannotated genes,this may be due to the reason that I have remapped all the missing/unmapped HGNC symbol using the HGNC symbol in the original expression dataset. Lets see if any of those unannotated genes are significant.
+
+```{r eval=TRUE}
+# genes with no annotation
+genes_no_annotation <- setdiff(ranks[,1], genes_all_gs)
+# genes with no annotation but significant
+sig_genes_no_annotation_all <- intersect(sig_express_genes, genes_no_annotation)
+# genes with no annotation and their rank 
+ranked_gene_no_annotation <- ranks[which(ranks[,1] 
+                              %in% genes_no_annotation),]
+length(sig_genes_no_annotation_all)
+```
+
+There are actually a lot of genes(228 genes) that are significant but not annotated. I have examines few of unannotated gene with high rank. It turns out they have annotation but not in the pathway gmt file I use. For example , NT5DC3
+and SSBP2 are top ranked genes, they are annotated in GO_Central:inferred from biological aspect of ancestor
+To explore more, I examine genes that are significant but not annotated in my enrichment pathway. I also discover many of the genes are commone in these two sets( significant genes that are not annotated to any of the enriched pathways vs  significant genes that are not annotated to any pathways in entire set of pathways). This aslo confirm that we may want to include more annotation source
+
+```{r eval=TRUE}
+# genes that are insignificant and their rank
+genes_no_sig <-setdiff(genes_all_gs, genes_sig_enr_gs)
+ranked_gene_no_sig <- ranks[which(ranks[,1] 
+                              %in% genes_no_sig),]
+# significant genes with no annotation to any of the enriched pathways
+sig_genes_no_annotation_pathway<- setdiff(sig_express_genes,genes_enr_gs)
+
+# common genes in both 
+common <-intersect(sig_genes_no_annotation_pathway,sig_genes_no_annotation_all)
+
+
+```
+
+## Heatmap of unannoated significant genes returned in the entire set of pathways analysis
+
+To visualize dark matter ; significant genes that are not annotated to any of the enriched pathways and significant genes that are not annotated to any pathways in entire set of pathways,I created two heatmaps
+
+For some reason, the heat map doesn't show up, here is the link to the (heatmap)[https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/A3/images/heatmap1.png]
+Caption; Figure 9 : Heatmap describing genes that are significant but has no annotation in the entire genesets
+
+```{r,eval=TRUE,fig.cap="Figure 9 : Heatmap decribing genes that are significant but has no annotation in the entire genesets"}
+
+normalized_count_data<-read.table(file=file.path(getwd(),"Data", "GSE152201_finalized_normalized_counts_mda_2022.txt"),header = TRUE,
+                                    sep = "\t")
+# select genes that are significant but with no annotation in the entire pathway datset
+sig_genes_no_annotation_exp <-normalized_count_data[normalized_count_data$hgnc_symbol %in% sig_genes_no_annotation_all,]
+
+# create a heatmap
+heatmap_matrix <-sig_genes_no_annotation_exp[3:8]
+heatmap_matrix <- t(scale(t(heatmap_matrix)))
+if(min(heatmap_matrix) == 0){
+  heatmap_col = colorRamp2(c( 0,max(heatmap_matrix)),
+                            c( "white", "red"))
+  } else {
+  heatmap_col = colorRamp2(c(min(heatmap_matrix), 0,
+                             max(heatmap_matrix)),
+                             c("blue", "white", "red"))
+  }
+
+current_heatmap <- Heatmap(as.matrix(sig_genes_no_annotation_exp[3:8]),
+                           cluster_rows = TRUE,
+                           cluster_columns = TRUE,
+                               show_row_dend = TRUE,
+                               show_column_dend = TRUE,
+                               col=heatmap_col,
+                               show_column_names = TRUE,
+                               show_row_names = FALSE,
+                               show_heatmap_legend = TRUE,
+                           row_title = "normalized clustered genes",
+                           column_title = "mda_samples"
+                               )
+current_heatmap
+
+```
+
+
+## Heatmap of unannoated significant genes returned in the set of pathways in the enrichment analysis
+
+
+```{r echo=TRUE,eval=TRUE,fig.cap="Figure 10 : Heatmap describing genes that are significant but has no annotation in the enriched genesets"}
+# select genes that are significant but with no annotation in the entriched pathway datsset
+sig_genes_no_annotation_exp <-normalized_count_data[normalized_count_data$hgnc_symbol %in% sig_genes_no_annotation_pathway,]
+
+# create a heatmap
+heatmap_matrix <-sig_genes_no_annotation_exp[3:8]
+heatmap_matrix <- t(scale(t(heatmap_matrix)))
+if(min(heatmap_matrix) == 0){
+  heatmap_col = colorRamp2(c( 0,max(heatmap_matrix)),
+                            c( "white", "red"))
+  } else {
+  heatmap_col = colorRamp2(c(min(heatmap_matrix), 0,
+                             max(heatmap_matrix)),
+                             c("blue", "white", "red"))
+  }
+
+current_heatmap <- Heatmap(as.matrix(sig_genes_no_annotation_exp[3:8]),
+                           cluster_rows = TRUE,
+                           cluster_columns = TRUE,
+                               show_row_dend = TRUE,
+                               show_column_dend = TRUE,
+                               col=heatmap_col,
+                               show_column_names = TRUE,
+                               show_row_names = FALSE,
+                               show_heatmap_legend = TRUE,
+                           row_title = "normalized clustered genes",
+                           column_title = "mda_samples"
+                               )
+
+current_heatmap
+```
+For some reason, the heat map doesn't show up, here is the link to the (heatmap)[https://github.com/bcb420-2022/Zhaojing_Chen/blob/main/A3/images/heatmap1.png]
+Caption; Figure 10 : Heatmap describing genes that are significant but has no annotation in the enriched genesets
+
+Notice that the heat map actually did not show very significant color difference, I double checked my code and did not find any mistakes. To explain this, I go back to my assignment 2 and look at those genes in the output file that has the information about p,q logfold value. It turns out they are all up-regulated but significant. This could be important in terms of identifying breast cancer subtypes because between subtypes, they may have  the same gene expressed as they are all breast cancer, the magnitude of the expression might be indicative of which subtype it is. However, there is more research to do.
+
+
+# Interpretation
+
+## Q1
+Do the enrichment results support conclusions or mechanism discussed in the original paper? How do these results differ from the results you got from Assignment #2 thresholded methods?
+
+In the paper, the author concluded that GR and STAT3 are cooperatively reguate the initiation of triple-negative breast cancer.
+Since this report is only focusing on GR, I cannot comment about anything related to STAT3. From my analysis, more researches are needed, GR are regulating many of the genes in the significant enriched dataset, so as many other transcription factors. More analysis are needed to uncover how those unregulated genes are related to patience with triple-negative cancer. Comparing to the analysis I did in Assignment 2 where I only looked at thresholded results, the GSEA as well as the enrichment map gives a more broad picture. In Assignment, my conclusion was that GR supports the author's conclusion because many of the returned geneset from my up-regulated geneset are related to breast cancer and translation. However, now I know that those up-regulated genes are also control by many other transcription factors. Will GR be the master transcription factors regulating all other transcription factor? There is definitely more to investigate upon.
+
+## Q2
+Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your result
+
+Yes, In general,mitochondrial electron transport chain (ETC) has been identified as an essential component in bioenergetics, biosynthesis and redox control during proliferation and metastasis of cancer cells. The electron transport chain and mitochondril expression c clusters support that there is actually some activation of cancerous changes happening in the treatment group. In addition, STAT signaling has been implicated in different breast cancer sub-types. STAT1 and STAT 3 has been implicated in the ER+ breast cancer subtype and HER2 subtypes reatively. Here the STAT1 and STAT2 cluster may be serve as a marker for certain breast cancer subtype.
+
+link to A3 journal:https://github.com/bcb420-2022/Zhaojing_Chen/wiki/Assignment-3
+
+
+# Citation
+
+
+
