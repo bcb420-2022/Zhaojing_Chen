@@ -218,8 +218,8 @@ Here is the caption:
 Table 1 : Top 5 GSEA returned pathways in the treatment group, this table describes basic statistics such as size, enrichment score, p and q value of the top 5 returned pathways in the treatment group 
 
 ```{r GSEA results up,eval=TRUE,fig.cap= "Table 1 : Top 5 GSEA returned pathways in the treatment group, this table describes basic statiscs such as size, enrichemnt scpre, p and q value of the top 5 returned pathways in the treatment group  " }
-GSEAResults <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
-knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
+GSEAResults <- read.table(file = file.path(getwd(),"A3/data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
+knitr::kable(A3/data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
 
 ```
 
@@ -228,8 +228,8 @@ knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 
 Table 2 : Top 5 GSEA returned pathways in the control group, this table describes basic statistics such as size, enrichment score, p and q value of the top 5 returned pathways in the control group
 
 ```{r GSEA results down, eval=TRUE, fig.cap="Table 2 : Top 5 GSEA returned pathways in the control group, this table describes basic statiscs such as size, enrichemnt scpre, p and q value of the top 5 returned pathways in the control group" }
-GSEAResults <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
-knitr::kable(data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
+GSEAResults <- read.table(file = file.path(getwd(),"A3/data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE)
+knitr::kable(A3/data.frame(GSEAResults[1:5, c(1, 4:8)]), format = "html", digits = 5)
 ```
 
 
@@ -571,7 +571,7 @@ To perform Dark analysis, I need genes form the universe geneset file, genes fro
 ```{r eval=TRUE}
 # my universe dataset
 # load the gmt file
-gmt_file <- file.path(getwd(),"data",
+gmt_file <- file.path(getwd(),"A3/data",
 "Supplementary_Table1_Human_GOBP_AllPathways_no_GO_iea_April_01_2022_symbol.gmt") 
 # get all genes associated with the geneset in the universe gmt file
 capture.output(genesets<-
@@ -581,7 +581,7 @@ names(genesets$genesets) <- genesets$geneset.names
 
 ```{r eval=TRUE}
 #load the rank file
-ranks <- read.table(file.path(getwd(),"data","rank_final.rnk"), header = TRUE, sep = "\t", quote="\"", 
+ranks <- read.table(file.path(getwd(),"A3/data","rank_final.rnk"), header = TRUE, sep = "\t", quote="\"", 
                     stringsAsFactors = FALSE)
  
 ```
@@ -589,9 +589,9 @@ ranks <- read.table(file.path(getwd(),"data","rank_final.rnk"), header = TRUE, s
 ```{r eval=TRUE}
 # my enriched file
 
-enr_file1 <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t",quote="\"", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE,row.names = 1)
+enr_file1 <- read.table(file = file.path(getwd(),"A3/data", "gsea_report_for_na_pos_1649710076185.tsv"), sep = "\t",quote="\"", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE,row.names = 1)
 # na_pos file
-enr_file2 <- read.table(file = file.path(getwd(),"data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t",quote="\"", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE,row.names = 1)
+enr_file2 <- read.table(file = file.path(getwd(),"A3/data", "gsea_report_for_na_neg_1649710076185.tsv"), sep = "\t",quote="\"", header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, fill = TRUE,row.names = 1)
 
 
 ```
@@ -633,11 +633,11 @@ for(i in 1:length(all_sig_enr_genesets)){
 ```{r eval=TRUE}
 # all significant gene from my expression dataset
 # Load the MDA231 cell line data
-up <- read.table(file=file.path(getwd(),"data",
+up <- read.table(file=file.path(getwd(),"A3/data",
                                    "mda_upregulated_genes.txt"),
                                     sep = "\t",
                                     stringsAsFactors = FALSE, ) 
-down<- read.table(file=file.path(getwd(),"data",
+down<- read.table(file=file.path(getwd(),"A3/data",
                                    "mda_downregulated_genes.txt"),
                                     sep = "\t",
                                     stringsAsFactors = FALSE, ) 
@@ -753,7 +753,7 @@ Caption; Figure 9 : Heatmap describing genes that are significant but has no ann
 
 ```{r,eval=TRUE,fig.cap="Figure 9 : Heatmap decribing genes that are significant but has no annotation in the entire genesets"}
 
-normalized_count_data<-read.table(file=file.path(getwd(),"Data", "GSE152201_finalized_normalized_counts_mda_2022.txt"),header = TRUE,
+normalized_count_data<-read.table(file=file.path(getwd(),"A3/data", "GSE152201_finalized_normalized_counts_mda_2022.txt"),header = TRUE,
                                     sep = "\t")
 # select genes that are significant but with no annotation in the entire pathway datset
 sig_genes_no_annotation_exp <-normalized_count_data[normalized_count_data$hgnc_symbol %in% sig_genes_no_annotation_all,]
